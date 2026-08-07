@@ -1,0 +1,27 @@
+[Unit]
+Description=Oryz wings (node daemon)
+Documentation=https://docs.oryz.example/deployment/wings
+After=network-online.target docker.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=@@DATA_DIR@@
+ExecStart=/usr/local/bin/oryz-wings --config @@CONF_FILE@@
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+
+# Wings needs the Docker socket and its own data tree, nothing else.
+NoNewPrivileges=false
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=@@DATA_DIR@@ /var/log/oryz-wings /var/run/docker.sock
+
+StandardOutput=append:/var/log/oryz-wings/wings.log
+StandardError=append:/var/log/oryz-wings/wings.log
+
+[Install]
+WantedBy=multi-user.target

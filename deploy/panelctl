@@ -1,0 +1,358 @@
+#!/usr/bin/env bash
+#
+# panelctl — Oryz Panel administration CLI
+#
+# Installed to /usr/local/bin/panelctl by the installer.
+
+set -Eeuo pipefail
+
+PANELCTL_VERSION="1.0.0"
+
+# Resolve the library directory: prefer the installed app, fall back to the
+# repository layout when running from a checkout.
+_self="$(readlink -f "${BASH_SOURCE[0]}")"
+for candidate in "/opt/oryz/app/deploy/lib" "$(dirname "$_self")/lib" "$(dirname "$_self")/../deploy/lib"; do
+  if [[ -f "$candidate/common.sh" ]]; then LIB_DIR="$candidate"; break; fi
+done
+[[ -n "${LIB_DIR:-}" ]] || { echo "panelctl: cannot locate deploy/lib" >&2; exit 1; }
+
+# shellcheck source=lib/common.sh
+source "$LIB_DIR/common.sh"
+source "$LIB_DIR/preflight.sh"
+source "$LIB_DIR/services.sh"
+source "$LIB_DIR/backup.sh"
+source "$LIB_DIR/verify.sh"
+source "$LIB_DIR/database.sh"
+source "$LIB_DIR/ssl.sh"
+source "$LIB_DIR/proxy.sh"
+source "$LIB_DIR/build.sh"
+
+ORYZ_TEMPLATE_DIR="${ORYZ_APP_DIR}/deploy/templates"
+
+usage() {
+  cat <<EOF
+${C_BOLD}panelctl${C_RESET} — ${ORYZ_NAME} administration CLI (v${PANELCTL_VERSION})
+
+  ${C_BOLD}Lifecycle${C_RESET}
+    install [args…]        Run the installer (delegates to deploy/install.sh)
+    update [--check]       Upgrade to the latest release, with automatic rollback
+    uninstall [--purge]    Remove services, app and (with --purge) data
+    version                Show panel and CLI versions
+
+  ${C_BOLD}Operations${C_RESET}
+    status                 Service overview
+    start | stop | restart Control all panel services
+    logs [-f] [unit]       Show logs (defaults to all panel units)
+    doctor                 Full health check with actionable remedies
+    cache:clear            Clear build and application caches
+    queue:restart          Restart queue and background workers
+
+  ${C_BOLD}Data${C_RESET}
+    backup [--label NAME]  Create a full backup (database, config, storage)
+    backup --list          List stored backups
+    backup --prune [N]     Keep only the N most recent backups (default 10)
+    restore ARCHIVE        Restore from a backup archive
+
+  ${C_BOLD}Configuration${C_RESET}
+    config get KEY         Print one configuration value
+    config set KEY VALUE   Update a configuration value and restart services
+    config list            List configuration keys (secret values redacted)
+    config edit            Open the configuration file in \$EDITOR
+    ssl renew              Renew or re-issue the TLS certificate
+    ssl status             Show certificate details
+
+Run 'panelctl COMMAND --help' where available. Docs: docs/deployment/
+EOF
+}
+
+need_config() {
+  env_load "$ORYZ_ENV_FILE" ||
+    die "no configuration at $ORYZ_ENV_FILE — run 'panelctl install' first"
+}
+
+SECRET_KEY_PATTERN='(SECRET|PASSWORD|KEY|TOKEN|DATABASE_URL|REDIS_URL)'
+
+# ---------------------------------------------------------------------------
+cmd_status() {
+  need_config
+  printf '\n  %s%s%s  ·  %s\n\n' "$C_BOLD" "$ORYZ_NAME" "$C_RESET" "${APP_URL:-unknown}"
+  services_status
+  printf '\n'
+  local unit; unit=oryz-api.service
+  systemctl show -p ActiveEnterTimestamp --value "$unit" 2>/dev/null |
+    grep -q . && dim "  api up since $(systemctl show -p ActiveEnterTimestamp --value "$unit")"
+}
+
+cmd_logs() {
+  local follow=0 units=()
+  while (( $# )); do
+    case "$1" in
+      -f|--follow) follow=1 ;;
+      *) units+=("oryz-${1#oryz-}") ;;
+    esac
+    shift
+  done
+  ((${#units[@]})) || units=("${ORYZ_UNITS[@]}")
+  local args=(); local u
+  for u in "${units[@]}"; do args+=(-u "$u"); done
+  (( follow )) && args+=(-f) || args+=(-n 200)
+  journalctl "${args[@]}" --no-pager
+}
+
+cmd_restart() { require_root; need_config; services_restart; success "services restarted"; cmd_status; }
+cmd_start()   { require_root; need_config; services_start;   success "services started"; }
+cmd_stop()    { require_root; need_config; services_stop;    success "services stopped"; }
+
+cmd_queue_restart() {
+  require_root; need_config
+  systemctl restart oryz-queue.service oryz-worker.service
+  success "queue and background workers restarted"
+}
+
+cmd_cache_clear() {
+  require_root; need_config
+  rm -rf "$ORYZ_APP_DIR/.vite" "$ORYZ_APP_DIR/node_modules/.cache" 2>/dev/null || true
+  if has_cmd redis-cli; then
+    if [[ -n "${REDIS_PASSWORD:-}" ]]; then
+      REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -n "${REDIS_DB:-0}" FLUSHDB >/dev/null
+    else
+      redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -n "${REDIS_DB:-0}" FLUSHDB >/dev/null
+    fi
+  fi
+  services_restart
+  success "caches cleared"
+}
+
+cmd_doctor() { need_config; run_doctor; }
+
+cmd_version() {
+  printf '  panelctl   %s\n' "$PANELCTL_VERSION"
+  printf '  panel      %s\n' "$(cat "$ORYZ_HOME/VERSION" 2>/dev/null || echo 'not installed')"
+  has_cmd node && printf '  node       %s\n' "$(node -v)"
+  has_cmd psql && printf '  postgres   %s\n' "$(psql --version | awk '{print $3}')"
+}
+
+# ---------------------------------------------------------------------------
+cmd_backup() {
+  require_root; need_config
+  case "${1:-}" in
+    --list) backup_list; return ;;
+    --prune) backup_prune "${2:-10}"; success "old backups pruned"; return ;;
+  esac
+  local label="manual"
+  [[ "${1:-}" == "--label" ]] && label="$2"
+  step "Creating backup"
+  local archive; archive="$(backup_create "$label")"
+  success "backup written to $archive ($(du -h "$archive" | cut -f1))"
+}
+
+cmd_restore() {
+  require_root; need_config
+  [[ -n "${1:-}" ]] || { backup_list; die "specify an archive: panelctl restore <archive>"; }
+  backup_restore "$1"
+}
+
+# ---------------------------------------------------------------------------
+cmd_config() {
+  local action="${1:-list}"; shift || true
+  case "$action" in
+    get)
+      need_config
+      [[ -n "${1:-}" ]] || die "usage: panelctl config get KEY"
+      env_get "$1" || die "key not found: $1"
+      ;;
+    get-admin-password)
+      require_root
+      local f="$ORYZ_STATE_DIR/initial-admin-password"
+      [[ -f "$f" ]] || die "no generated administrator password is stored (it was shown once at install time)"
+      cat "$f"; shred -u "$f" 2>/dev/null || rm -f "$f"
+      warn "this value has now been erased from disk"
+      ;;
+    set)
+      require_root; need_config
+      [[ -n "${1:-}" && $# -ge 2 ]] || die "usage: panelctl config set KEY VALUE"
+      env_set "$1" "$2"; secure_env_file
+      success "$1 updated"
+      confirm "Restart services to apply?" y && services_restart
+      ;;
+    list)
+      need_config
+      local line key value
+      while IFS= read -r line; do
+        [[ "$line" =~ ^[A-Z] ]] || continue
+        key="${line%%=*}"; value="${line#*=}"
+        if [[ "$key" =~ $SECRET_KEY_PATTERN ]]; then value="${C_DIM}<redacted>${C_RESET}"; fi
+        printf '  %-26s %s\n' "$key" "$value"
+      done <"$ORYZ_ENV_FILE"
+      ;;
+    edit)
+      require_root
+      "${EDITOR:-nano}" "$ORYZ_ENV_FILE"
+      secure_env_file
+      confirm "Restart services to apply?" y && services_restart
+      ;;
+    repair)
+      require_root; need_config
+      local k
+      for k in JWT_SECRET JWT_REFRESH_SECRET SESSION_SECRET API_SIGNING_SECRET; do
+        [[ -n "$(env_get "$k" || true)" ]] || { env_set "$k" "$(gen_secret 64)"; log "regenerated $k"; }
+      done
+      [[ -n "$(env_get ENCRYPTION_KEY || true)" ]] || warn "ENCRYPTION_KEY is missing — regenerating it makes existing encrypted values unreadable"
+      secure_env_file
+      success "configuration repaired"
+      ;;
+    *) die "unknown config action: $action" ;;
+  esac
+}
+
+cmd_ssl() {
+  need_config
+  case "${1:-status}" in
+    renew)
+      require_root
+      step "Renewing certificate"
+      case "${SSL_MODE}" in
+        letsencrypt)
+          certbot renew --force-renewal --quiet || die "renewal failed — check 'certbot certificates'"
+          systemctl reload "${PROXY_KIND}" 2>/dev/null || true
+          success "certificate renewed"
+          ;;
+        selfsigned) rm -f "$SSL_CERT_PATH"; PANEL_DOMAIN="$APP_DOMAIN"; generate_self_signed; systemctl reload nginx 2>/dev/null || true ;;
+        *) die "SSL_MODE=${SSL_MODE} is managed outside the panel" ;;
+      esac
+      ;;
+    status)
+      DOCTOR_FAILURES=0; DOCTOR_WARNINGS=0
+      check_ssl
+      ;;
+    *) die "usage: panelctl ssl [renew|status]" ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+cmd_install() {
+  local installer="$ORYZ_APP_DIR/deploy/install.sh"
+  [[ -f "$installer" ]] || installer="$(dirname "$LIB_DIR")/install.sh"
+  [[ -f "$installer" ]] || die "installer not found"
+  exec bash "$installer" "$@"
+}
+
+cmd_update() {
+  require_root; need_config
+  local updater="$ORYZ_APP_DIR/deploy/upgrade.sh"
+  [[ -f "$updater" ]] || updater="$(dirname "$LIB_DIR")/upgrade.sh"
+  [[ -f "$updater" ]] || die "upgrade script not found"
+  exec bash "$updater" "$@"
+}
+
+cmd_uninstall() {
+  require_root
+  env_load "$ORYZ_ENV_FILE" 2>/dev/null || true
+  local purge=0
+  [[ "${1:-}" == "--purge" ]] && purge=1
+
+  banner
+  warn "This removes ${ORYZ_NAME} from this host."
+  (( purge )) && warn "--purge also deletes the database, configuration, storage and ALL backups."
+  confirm "Type-through confirmation: remove the panel?" n || die "uninstall cancelled"
+
+  if (( purge )); then
+    confirm "Really delete all data irreversibly?" n || die "uninstall cancelled"
+  else
+    step "Safety backup"
+    local archive; archive="$(backup_create pre-uninstall)"
+    success "backup kept at $archive"
+  fi
+
+  step "Removing services"
+  remove_services
+  check_row "systemd units" "removed" ok
+
+  step "Removing proxy configuration"
+  rm -f /etc/nginx/sites-enabled/oryz.conf /etc/nginx/sites-available/oryz.conf \
+        /etc/nginx/conf.d/oryz-ratelimit.conf /etc/nginx/snippets/oryz-security.conf
+  systemctl reload nginx 2>/dev/null || true
+  check_row "Reverse proxy" "configuration removed" ok
+
+  step "Removing application"
+  rm -rf "$ORYZ_APP_DIR" "$ORYZ_HOME/releases"
+  rm -f /usr/local/bin/panelctl /etc/logrotate.d/oryz
+  check_row "Application" "removed" ok
+
+  if (( purge )); then
+    step "Purging data"
+    runuser -u postgres -- psql -tAc "DROP DATABASE IF EXISTS \"${DB_NAME}\"" >/dev/null 2>&1 || true
+    runuser -u postgres -- psql -tAc "DROP ROLE IF EXISTS \"${DB_USER}\"" >/dev/null 2>&1 || true
+    rm -rf "$ORYZ_STATE_DIR" "$ORYZ_ENV_DIR" "$ORYZ_LOG_DIR" "$ORYZ_HOME"
+    userdel "$ORYZ_USER" 2>/dev/null || true
+    groupdel "$ORYZ_GROUP" 2>/dev/null || true
+    check_row "Data" "database, configuration and storage deleted" ok
+  else
+    dim "  data kept: $ORYZ_STATE_DIR, $ORYZ_ENV_FILE"
+  fi
+
+  success "${ORYZ_NAME} removed"
+}
+
+# ---------------------------------------------------------------------------
+# Node (wings) management. Deliberately separate from the panel commands: a
+# node keeps running whether or not the panel on this host is healthy.
+cmd_wings() {
+  local conf="${WINGS_CONF_FILE:-/etc/oryz-wings/config.yml}"
+  case "${1:-status}" in
+    status)  systemctl status oryz-wings --no-pager ;;
+    start)   require_root; systemctl start oryz-wings ;;
+    stop)    require_root; warn "stopping wings leaves containers running (restart policy unless-stopped)"
+             systemctl stop oryz-wings ;;
+    restart) require_root; systemctl restart oryz-wings ;;
+    logs)    journalctl -u oryz-wings ${2:+-n "$2"} -f ;;
+    config)  require_root; ${EDITOR:-nano} "$conf" ;;
+    token)
+      require_root
+      [[ -f "$conf" ]] || die "no node configured on this host"
+      # Reprint the portable registration blob for pasting into ANY panel.
+      local uuid name fqdn scheme port sftp token_id token
+      uuid="$(awk '/^uuid:/ {print $2}' "$conf")"
+      name="$(awk '/^name:/ {print $2}' "$conf")"
+      fqdn="$(awk '/public_fqdn:/ {print $2}' "$conf")"
+      scheme="$(awk '/scheme:/ {print $2}' "$conf")"
+      port="$(awk '/^  port:/ {print $2; exit}' "$conf")"
+      sftp="$(awk '/^  port:/ {print $2}' "$conf" | tail -1)"
+      token_id="$(awk '/token_id:/ {print $2}' "$conf")"
+      token="$(awk '/^  token:/ {print $2}' "$conf")"
+      printf '{"uuid":"%s","name":"%s","fqdn":"%s","scheme":"%s","port":%s,"sftp_port":%s,"token_id":"%s","token":"%s"}' \
+        "$uuid" "$name" "$fqdn" "$scheme" "$port" "$sftp" "$token_id" "$token" | base64 -w0
+      printf '\n'
+      ;;
+    *) die "usage: panelctl wings [status|start|stop|restart|logs|config|token]" ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+main() {
+  local cmd="${1:-help}"; shift || true
+  case "$cmd" in
+    wings|node)     cmd_wings "$@" ;;
+
+    install)        cmd_install "$@" ;;
+    update|upgrade) cmd_update "$@" ;;
+    uninstall)      cmd_uninstall "$@" ;;
+    doctor)         cmd_doctor "$@" ;;
+    status)         cmd_status "$@" ;;
+    start)          cmd_start ;;
+    stop)           cmd_stop ;;
+    restart)        cmd_restart ;;
+    backup)         cmd_backup "$@" ;;
+    restore)        cmd_restore "$@" ;;
+    logs)           cmd_logs "$@" ;;
+    config)         cmd_config "$@" ;;
+    ssl)            cmd_ssl "$@" ;;
+    cache:clear)    cmd_cache_clear ;;
+    queue:restart)  cmd_queue_restart ;;
+    version|-v|--version) cmd_version ;;
+    help|-h|--help) usage ;;
+    *) usage; die "unknown command: $cmd" ;;
+  esac
+}
+
+main "$@"

@@ -1,0 +1,33 @@
+[Unit]
+Description=Oryz Panel web frontend (SSR renderer)
+PartOf=oryz.target
+After=oryz-api.service
+Requires=oryz-api.service
+
+[Service]
+Type=simple
+User=@@USER@@
+Group=@@GROUP@@
+WorkingDirectory=@@APP_DIR@@
+EnvironmentFile=@@ENV_FILE@@
+Environment=NODE_ENV=production
+Environment=ORYZ_ROLE=web
+ExecStart=/usr/bin/node @@APP_DIR@@/.output/server/index.mjs
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+StandardOutput=append:@@LOG_DIR@@/web.log
+StandardError=append:@@LOG_DIR@@/web.error.log
+SyslogIdentifier=oryz-web
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=@@STATE_DIR@@ @@LOG_DIR@@
+CapabilityBoundingSet=
+LimitNOFILE=65535
+
+[Install]
+WantedBy=oryz.target

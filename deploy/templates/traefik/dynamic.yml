@@ -1,0 +1,83 @@
+# Oryz Panel — Traefik dynamic configuration.
+# Copy to /etc/traefik/dynamic/oryz.yml on the Traefik host.
+
+http:
+  routers:
+    oryz-ws:
+      rule: "Host(`@@DOMAIN@@`) && PathPrefix(`/ws`)"
+      entryPoints: [websecure]
+      service: oryz-ws
+      middlewares: [oryz-headers]
+      tls:
+        certResolver: letsencrypt
+
+    oryz-auth:
+      rule: "Host(`@@DOMAIN@@`) && (PathPrefix(`/api/auth`) || PathPrefix(`/auth`))"
+      entryPoints: [websecure]
+      service: oryz-app
+      middlewares: [oryz-headers, oryz-auth-ratelimit, oryz-compress]
+      priority: 200
+      tls:
+        certResolver: letsencrypt
+
+    oryz-app:
+      rule: "Host(`@@DOMAIN@@`)"
+      entryPoints: [websecure]
+      service: oryz-app
+      middlewares: [oryz-headers, oryz-ratelimit, oryz-compress]
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    oryz-app:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://127.0.0.1:@@APP_PORT@@"
+        healthCheck:
+          path: /api/health
+          interval: 30s
+          timeout: 5s
+
+    oryz-ws:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "http://127.0.0.1:@@WS_PORT@@"
+
+  middlewares:
+    oryz-compress:
+      compress:
+        minResponseBodyBytes: 1024
+
+    oryz-ratelimit:
+      rateLimit:
+        average: 30
+        burst: 100
+        period: 1s
+
+    oryz-auth-ratelimit:
+      rateLimit:
+        average: 1
+        burst: 10
+        period: 1s
+
+    oryz-headers:
+      headers:
+        stsSeconds: 63072000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        contentTypeNosniff: true
+        frameDeny: false
+        customFrameOptionsValue: SAMEORIGIN
+        referrerPolicy: strict-origin-when-cross-origin
+        customResponseHeaders:
+          Permissions-Policy: "geolocation=(), microphone=(), camera=(), payment=()"
+          Server: ""
+        contentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' wss: https:; worker-src 'self' blob:; frame-ancestors 'self'; base-uri 'self'; object-src 'none'"
+
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: true

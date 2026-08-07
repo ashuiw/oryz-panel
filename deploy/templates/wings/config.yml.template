@@ -1,0 +1,70 @@
+# Oryz wings — node configuration.
+#
+# This file belongs to ONE node. Everything the node needs to run its servers
+# lives here and under data_dir; nothing is shared with other nodes, so a node
+# going down affects only the servers it hosts.
+#
+# The node keeps running its containers when the panel is unreachable: state is
+# reconciled from the local database and containers use restart: unless-stopped.
+
+uuid: @@UUID@@
+name: @@NAME@@
+
+api:
+  host: 0.0.0.0
+  port: @@PORT@@
+  scheme: @@SCHEME@@
+  public_fqdn: @@FQDN@@
+  upload_limit_mb: 256
+
+sftp:
+  bind: 0.0.0.0
+  port: @@SFTP_PORT@@
+
+# Credentials this node presents to the panel. token_id identifies the node,
+# token authenticates it. Both are node-scoped — a panel is just a client here,
+# so the same node can be moved to a different panel by changing remote.url.
+remote:
+  url: @@PANEL_URL@@
+  token_id: @@TOKEN_ID@@
+  token: @@TOKEN@@
+  timeout_seconds: 15
+  # How long the node runs unattended when the panel cannot be reached.
+  # 0 = forever: servers must not die because the web panel did.
+  offline_grace_seconds: 0
+
+system:
+  data_dir: @@DATA_DIR@@
+  volume_dir: @@DATA_DIR@@/volumes
+  backup_dir: @@DATA_DIR@@/backups
+  state_dir: @@DATA_DIR@@/state
+  log_dir: /var/log/oryz-wings
+  username: oryz-wings
+  timezone: UTC
+  check_permissions_on_boot: true
+  # Local durable state. The node can start, restore and supervise every server
+  # it owns from this database with no panel involved.
+  database: @@DATA_DIR@@/state/wings.db
+
+docker:
+  network:
+    name: oryz0
+    driver: bridge
+    interface: 172.21.0.1
+    enable_icc: false
+  # Containers survive daemon restarts, host reboots and panel outages.
+  restart_policy: unless-stopped
+  tmpfs_size_mb: 128
+  container_pid_limit: 512
+
+capacity:
+  memory_mb: @@MEMORY_MB@@
+  disk_mb: @@DISK_MB@@
+  memory_overallocate: 0
+  disk_overallocate: 0
+
+throttles:
+  console_lines_per_interval: 2000
+  console_interval_ms: 100
+
+allowed_origins: []

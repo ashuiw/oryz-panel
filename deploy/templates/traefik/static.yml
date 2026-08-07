@@ -1,0 +1,42 @@
+# Oryz Panel — Traefik static configuration.
+# Merge into your existing traefik.yml; do not blindly overwrite it.
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+    http2:
+      maxConcurrentStreams: 250
+    transport:
+      respondingTimeouts:
+        readTimeout: 0s      # required for long-lived console WebSockets
+        idleTimeout: 3600s
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "@@SSL_EMAIL@@"
+      storage: /etc/traefik/acme.json
+      httpChallenge:
+        entryPoint: web
+
+providers:
+  file:
+    filename: /etc/traefik/dynamic/oryz.yml
+    watch: true
+
+log:
+  level: INFO
+
+accessLog:
+  filePath: /var/log/traefik/access.log

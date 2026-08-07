@@ -1,0 +1,31 @@
+[Unit]
+Description=Oryz Panel scheduler (cron-like tasks)
+PartOf=oryz.target
+After=postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=@@USER@@
+Group=@@GROUP@@
+WorkingDirectory=@@APP_DIR@@
+EnvironmentFile=@@ENV_FILE@@
+Environment=NODE_ENV=production
+Environment=ORYZ_ROLE=scheduler
+ExecStart=/usr/bin/node @@APP_DIR@@/.output/server/scheduler.mjs
+Restart=always
+RestartSec=15
+TimeoutStopSec=30
+
+StandardOutput=append:@@LOG_DIR@@/scheduler.log
+StandardError=append:@@LOG_DIR@@/scheduler.error.log
+SyslogIdentifier=oryz-scheduler
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=@@STATE_DIR@@ @@LOG_DIR@@
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=oryz.target

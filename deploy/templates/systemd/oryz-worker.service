@@ -1,0 +1,31 @@
+[Unit]
+Description=Oryz Panel background worker
+PartOf=oryz.target
+After=redis-server.service postgresql.service
+
+[Service]
+Type=simple
+User=@@USER@@
+Group=@@GROUP@@
+WorkingDirectory=@@APP_DIR@@
+EnvironmentFile=@@ENV_FILE@@
+Environment=NODE_ENV=production
+Environment=ORYZ_ROLE=worker
+ExecStart=/usr/bin/node @@APP_DIR@@/.output/server/worker.mjs
+Restart=always
+RestartSec=10
+TimeoutStopSec=60
+
+StandardOutput=append:@@LOG_DIR@@/worker.log
+StandardError=append:@@LOG_DIR@@/worker.error.log
+SyslogIdentifier=oryz-worker
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=@@STATE_DIR@@ @@LOG_DIR@@
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=oryz.target

@@ -1,0 +1,49 @@
+[Unit]
+Description=Oryz Panel API and WebSocket server
+Documentation=https://docs.oryz.example/deployment
+PartOf=oryz.target
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@@USER@@
+Group=@@GROUP@@
+WorkingDirectory=@@APP_DIR@@
+EnvironmentFile=@@ENV_FILE@@
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node @@APP_DIR@@/.output/server/index.mjs
+Restart=always
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+StandardOutput=append:@@LOG_DIR@@/api.log
+StandardError=append:@@LOG_DIR@@/api.error.log
+SyslogIdentifier=oryz-api
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+ReadWritePaths=@@STATE_DIR@@ @@LOG_DIR@@ @@APP_DIR@@/.output
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+LimitNOFILE=65535
+
+[Install]
+WantedBy=oryz.target
