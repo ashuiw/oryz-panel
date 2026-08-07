@@ -244,6 +244,11 @@ env_load() {
 
 secure_env_file() {
   local file="${1:-$ORYZ_ENV_FILE}"
+  # The service account must be able to traverse the directory, otherwise a
+  # read of the file (or of a symlink pointing at it) fails with EACCES.
+  local dir; dir="$(dirname "$file")"
+  chown "root:${ORYZ_GROUP}" "$dir" 2>/dev/null || true
+  chmod 0750 "$dir"
   chown "root:${ORYZ_GROUP}" "$file" 2>/dev/null || true
   chmod 0640 "$file"
 }

@@ -212,6 +212,7 @@ EOF
     [[ "${DB_MODE}" == "local" ]] && provision_local_database
     verify_database_connection
     [[ "${SKIP_BUILD:-0}" == "1" ]] || build_application
+    bootstrap_auth_schema
     run_migrations
     seed_initial_data
     create_admin_account

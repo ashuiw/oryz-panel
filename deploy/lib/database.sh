@@ -52,6 +52,37 @@ verify_database_connection() {
   die "cannot connect to the database as ${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
 }
 
+bootstrap_auth_schema() {
+  # The panel's migrations are Supabase-shaped: they expect an `auth` schema,
+  # `auth.users`, `auth.uid()` and the anon/authenticated/service_role roles.
+  # A vanilla PostgreSQL server has none of those, so create them first.
+  step "Auth schema bootstrap"
+  local sql="$ORYZ_APP_DIR/deploy/sql/00-bootstrap.sql"
+  [[ -f "$sql" ]] || sql="$SCRIPT_DIR/sql/00-bootstrap.sql"
+  [[ -f "$sql" ]] || die "bootstrap SQL not found (expected deploy/sql/00-bootstrap.sql)"
+
+  if [[ "${DB_MODE}" == "local" ]]; then
+    # Superuser: can create the shared roles. Ownership is then handed to the
+    # panel role so later migrations may add triggers on auth.users.
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -d "$DB_NAME" -q -f "$sql"
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -d "$DB_NAME" -q -c "
+      ALTER SCHEMA auth OWNER TO \"${DB_USER}\";
+      ALTER TABLE auth.users OWNER TO \"${DB_USER}\";
+      ALTER TABLE auth.sessions OWNER TO \"${DB_USER}\";
+      GRANT \"anon\", \"authenticated\", \"service_role\" TO \"${DB_USER}\";
+      DO \$\$ DECLARE f record; BEGIN
+        FOR f IN SELECT p.oid::regprocedure AS sig FROM pg_proc p
+                 JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'auth'
+        LOOP EXECUTE format('ALTER FUNCTION %s OWNER TO %I', f.sig, '${DB_USER}'); END LOOP;
+      END \$\$;"
+  else
+    # Remote/managed Postgres: the panel role must already be allowed to create
+    # schemas. Role creation is skipped gracefully by the SQL itself.
+    psql_app -q -f "$sql"
+  fi
+  check_row "Auth compatibility" "auth schema, helpers and roles ready" ok
+}
+
 run_migrations() {
   step "Database migrations"
   if [[ ! -d "$ORYZ_APP_DIR" ]]; then die "application directory missing: $ORYZ_APP_DIR"; fi
@@ -96,28 +127,52 @@ SQL
 seed_initial_data() {
   step "Seeding reference data"
   local seed="$ORYZ_APP_DIR/deploy/sql/seed.sql"
+  [[ -f "$seed" ]] || seed="$SCRIPT_DIR/sql/seed.sql"
   if [[ -f "$seed" ]]; then
     psql_app -q --single-transaction -f "$seed"
-    check_row "Seed data" "roles, permissions and defaults loaded" ok
+    check_row "Seed data" "defaults loaded" ok
   else
-    warn "no seed file at $seed — skipping"
+    warn "no seed file found — skipping"
   fi
 }
 
 create_admin_account() {
   step "Administrator account"
-  # Password hashing happens in the application so the algorithm stays in one
-  # place; the plaintext is passed over stdin and never appears in argv or logs.
-  if [[ -f "$ORYZ_APP_DIR/deploy/scripts/create-admin.mjs" ]]; then
-    printf '%s' "$ADMIN_PASSWORD" | run_as_app \
-      "node deploy/scripts/create-admin.mjs --email '${ADMIN_EMAIL}' --name '${ADMIN_NAME}' --password-stdin"
-  else
-    local hash
-    hash="$(psql_app -tAc "SELECT crypt('$(printf '%s' "$ADMIN_PASSWORD" | sed "s/'/''/g")', gen_salt('bf', 12))")"
-    psql_app -q -c "INSERT INTO admin_bootstrap (email, display_name, password_hash)
-      VALUES ('${ADMIN_EMAIL}', '${ADMIN_NAME}', '${hash}')
-      ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash" 2>/dev/null ||
-      warn "admin bootstrap table not present — create the first account through the web wizard"
-  fi
-  check_row "Administrator" "${ADMIN_EMAIL}" ok
+  # The password is passed as a psql variable, never interpolated into SQL text
+  # and never written to argv of another process; hashing uses pgcrypto bcrypt.
+  local sql; sql="$(mktemp)"; chmod 0600 "$sql"
+  cat >"$sql" <<'SQL'
+\set ON_ERROR_STOP on
+WITH upserted AS (
+  INSERT INTO auth.users (email, encrypted_password, email_confirmed_at, raw_user_meta_data)
+  VALUES (
+    :'admin_email',
+    crypt(:'admin_password', gen_salt('bf', 12)),
+    now(),
+    jsonb_build_object('display_name', :'admin_name')
+  )
+  ON CONFLICT (email) DO UPDATE
+    SET encrypted_password = crypt(:'admin_password', gen_salt('bf', 12)),
+        email_confirmed_at = COALESCE(auth.users.email_confirmed_at, now()),
+        raw_user_meta_data = auth.users.raw_user_meta_data || jsonb_build_object('display_name', :'admin_name')
+  RETURNING id, email
+)
+INSERT INTO public.profiles (id, email, display_name, username)
+SELECT u.id, u.email, :'admin_name', split_part(u.email, '@', 1) || '_' || substr(u.id::text, 1, 6)
+FROM upserted u
+ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name, email = EXCLUDED.email;
+
+INSERT INTO public.user_roles (user_id, role)
+SELECT id, 'owner'::public.app_role FROM auth.users WHERE email = :'admin_email'
+ON CONFLICT (user_id, role) DO NOTHING;
+SQL
+  PGPASSWORD="$DB_PASSWORD" psql -v ON_ERROR_STOP=1 \
+    -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -q \
+    -v admin_email="$ADMIN_EMAIL" \
+    -v admin_name="${ADMIN_NAME:-Administrator}" \
+    -v admin_password="$ADMIN_PASSWORD" \
+    -f "$sql" || { rm -f "$sql"; die "could not create the administrator account"; }
+  rm -f "$sql"
+  check_row "Administrator" "${ADMIN_EMAIL} (owner)" ok
 }
+

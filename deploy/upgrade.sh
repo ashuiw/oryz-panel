@@ -115,6 +115,7 @@ check_row "Services" "stopped" ok
 
 ORYZ_REFETCH=1 fetch_release
 build_application
+bootstrap_auth_schema
 run_migrations
 seed_initial_data
 
