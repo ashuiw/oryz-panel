@@ -198,8 +198,14 @@ gen_hex() { local bytes="${1:-32}"; od -An -tx1 -N "$bytes" /dev/urandom | tr -d
 
 gen_password() {
   # Alphanumeric only — safe inside connection URLs without escaping.
-  local len="${len:-${1:-32}}"
-  LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c "$len"
+  # NOTE: never pipe an unbounded /dev/urandom stream into `head` — head exits
+  # early, the upstream process dies with SIGPIPE and `set -o pipefail` turns
+  # that into exit 141, aborting the installer. Read a bounded chunk instead.
+  local len="${1:-32}" out=""
+  while (( ${#out} < len )); do
+    out+="$(head -c $(( (len + 16) * 3 )) /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' || true)"
+  done
+  printf '%s' "${out:0:len}"
 }
 
 # ---------------------------------------------------------------------------

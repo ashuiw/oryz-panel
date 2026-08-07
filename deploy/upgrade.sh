@@ -46,7 +46,7 @@ SNAPSHOT_DIR=""
 
 latest_version() {
   curl -fsSL --max-time 15 "${ORYZ_UPDATE_MANIFEST:-https://releases.oryz.example/latest.json}" 2>/dev/null |
-    sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1
+    sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | awk 'NR==1'
 }
 
 rollback() {

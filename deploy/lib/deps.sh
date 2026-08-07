@@ -160,7 +160,7 @@ install_web_server() {
         APT_UPDATED=0
         pkg_install caddy
       fi
-      check_row "Caddy" "$(caddy version 2>/dev/null | head -n1)" ok
+      check_row "Caddy" "$(caddy version 2>/dev/null | awk 'NR==1')" ok
       ;;
     traefik)
       step "Traefik"

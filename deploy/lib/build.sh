@@ -15,7 +15,7 @@ fetch_release() {
     local tmp; tmp="$(mktemp -d)"
     curl -fsSL "$ORYZ_RELEASE_URL" -o "$tmp/release.tar.gz"
     tar -xzf "$tmp/release.tar.gz" -C "$tmp"
-    local root; root="$(find "$tmp" -maxdepth 2 -name package.json -printf '%h\n' | head -n1)"
+    local root; root="$(find "$tmp" -maxdepth 2 -name package.json -printf '%h\n' | awk 'NR==1')"
     [[ -n "$root" ]] || die "release archive did not contain a package.json"
     install -d -o "$ORYZ_USER" -g "$ORYZ_GROUP" -m 0750 "$ORYZ_APP_DIR"
     tar -C "$root" -cf - . | tar -C "$ORYZ_APP_DIR" -xf -
