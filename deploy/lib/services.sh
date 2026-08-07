@@ -2,11 +2,7 @@
 # systemd unit installation and lifecycle management.
 
 ORYZ_UNITS=(
-  oryz-api.service
   oryz-web.service
-  oryz-worker.service
-  oryz-scheduler.service
-  oryz-queue.service
 )
 ORYZ_TARGET="oryz.target"
 
@@ -14,6 +10,15 @@ install_services() {
   step "System services"
   local tpl_dir="${ORYZ_TEMPLATE_DIR:-$ORYZ_APP_DIR/deploy/templates}/systemd"
   local unit
+
+  # Remove units from older installer revisions. The TanStack production build
+  # emits one server entry; launching nonexistent worker/queue files or a
+  # duplicate API process makes an otherwise successful install look broken.
+  local legacy_units=(oryz-api.service oryz-worker.service oryz-scheduler.service oryz-queue.service)
+  for unit in "${legacy_units[@]}"; do
+    systemctl disable --now "$unit" >/dev/null 2>&1 || true
+    rm -f "/etc/systemd/system/$unit"
+  done
 
   for unit in "${ORYZ_UNITS[@]}" "$ORYZ_TARGET"; do
     [[ -f "$tpl_dir/$unit" ]] || die "missing unit template: $tpl_dir/$unit"

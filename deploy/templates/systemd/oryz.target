@@ -1,7 +1,7 @@
 [Unit]
 Description=Oryz Panel (all services)
 Documentation=https://docs.oryz.example/deployment
-Wants=oryz-api.service oryz-web.service oryz-worker.service oryz-scheduler.service oryz-queue.service
+Wants=oryz-web.service
 After=network-online.target
 
 [Install]

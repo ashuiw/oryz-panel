@@ -162,6 +162,8 @@ APP_URL=${PANEL_URL}
 APP_DOMAIN=${PANEL_DOMAIN}
 APP_PORT=${APP_PORT}
 APP_HOST=127.0.0.1
+PORT=${APP_PORT}
+HOST=127.0.0.1
 APP_KEY=${APP_KEY}
 TRUST_PROXY=true
 LOG_LEVEL=${LOG_LEVEL:-info}
@@ -278,10 +280,10 @@ EOF
 
 create_service_account() {
   step "Service account and directories"
+  getent group "$ORYZ_GROUP" >/dev/null 2>&1 || groupadd --system "$ORYZ_GROUP"
   if id -u "$ORYZ_USER" >/dev/null 2>&1; then
     check_row "User" "$ORYZ_USER exists" ok
   else
-    groupadd --system "$ORYZ_GROUP" 2>/dev/null || true
     useradd --system --gid "$ORYZ_GROUP" --home-dir "$ORYZ_HOME" \
       --shell /usr/sbin/nologin --comment "Oryz Panel" "$ORYZ_USER"
     check_row "User" "$ORYZ_USER created (system, nologin)" ok
@@ -291,6 +293,6 @@ create_service_account() {
            "$ORYZ_LOG_DIR" "${STORAGE_PATH:-$ORYZ_STATE_DIR/storage}" "$ORYZ_HOME/releases" "$ORYZ_HOME/proxy"; do
     install -d -o "$ORYZ_USER" -g "$ORYZ_GROUP" -m 0750 "$d"
   done
-  chmod 0700 "$ORYZ_BACKUP_DIR"
+  normalize_panel_permissions
   check_row "Directories" "created with 0750 ${ORYZ_USER}:${ORYZ_GROUP}" ok
 }

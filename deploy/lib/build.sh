@@ -39,7 +39,7 @@ fetch_release() {
     rm -rf "$tmp"
   fi
 
-  chown -R "$ORYZ_USER:$ORYZ_GROUP" "$ORYZ_APP_DIR"
+  normalize_panel_permissions
   local version; version="$(node -p "require('$ORYZ_APP_DIR/package.json').version" 2>/dev/null || echo unknown)"
   printf '%s\n' "$version" >"$ORYZ_HOME/VERSION"
   check_row "Version" "$version" ok
@@ -64,7 +64,7 @@ build_application() {
   run_as_app "rm -rf .vite node_modules/.cache .pnpm-store 2>/dev/null" || true
   find "$ORYZ_APP_DIR" -name '*.map' -path '*/.output/*' -delete 2>/dev/null || true
 
-  chown -R "$ORYZ_USER:$ORYZ_GROUP" "$ORYZ_APP_DIR"
+  normalize_panel_permissions
   local size; size="$(du -sh "$ORYZ_APP_DIR" 2>/dev/null | cut -f1)"
   check_row "Build output" "ready (${size:-?} on disk)" ok
   success "application built"

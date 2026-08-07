@@ -44,8 +44,9 @@ ${C_BOLD}panelctl${C_RESET} — ${ORYZ_NAME} administration CLI (v${PANELCTL_VER
     start | stop | restart Control all panel services
     logs [-f] [unit]       Show logs (defaults to all panel units)
     doctor                 Full health check with actionable remedies
+    permissions:repair     Repair application and runtime path permissions
     cache:clear            Clear build and application caches
-    queue:restart          Restart queue and background workers
+    queue:restart          Restart the application process
 
   ${C_BOLD}Data${C_RESET}
     backup [--label NAME]  Create a full backup (database, config, storage)
@@ -105,8 +106,9 @@ cmd_stop()    { require_root; need_config; services_stop;    success "services s
 
 cmd_queue_restart() {
   require_root; need_config
-  systemctl restart oryz-queue.service oryz-worker.service
-  success "queue and background workers restarted"
+  warn "this build has no separate queue process; restarting the application service instead"
+  systemctl restart oryz-web.service
+  success "application service restarted"
 }
 
 cmd_cache_clear() {
@@ -124,6 +126,12 @@ cmd_cache_clear() {
 }
 
 cmd_doctor() { need_config; run_doctor; }
+
+cmd_permissions_repair() {
+  require_root; need_config
+  normalize_panel_permissions
+  success "application, configuration, state and log permissions repaired"
+}
 
 cmd_version() {
   printf '  panelctl   %s\n' "$PANELCTL_VERSION"
@@ -338,6 +346,7 @@ main() {
     update|upgrade) cmd_update "$@" ;;
     uninstall)      cmd_uninstall "$@" ;;
     doctor)         cmd_doctor "$@" ;;
+    permissions:repair) cmd_permissions_repair ;;
     status)         cmd_status "$@" ;;
     start)          cmd_start ;;
     stop)           cmd_stop ;;

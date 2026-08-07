@@ -88,12 +88,11 @@ install_wings() {
   INSTALL_DOCKER=yes install_docker
   ensure_wings_account
 
-  install -d -m 0750 "$WINGS_CONF_DIR"
-  install -d -m 0750 "$WINGS_DATA_DIR"
-  install -d -m 0750 "$WINGS_DATA_DIR/volumes"
-  install -d -m 0750 "$WINGS_DATA_DIR/backups"
-  install -d -m 0750 "$WINGS_DATA_DIR/state"
-  install -d -m 0750 /var/log/oryz-wings
+  install -d -o root -g "$WINGS_GROUP" -m 0750 "$WINGS_CONF_DIR"
+  install -d -o "$WINGS_USER" -g "$WINGS_GROUP" -m 0750 \
+    "$WINGS_DATA_DIR" "$WINGS_DATA_DIR/volumes" "$WINGS_DATA_DIR/backups" \
+    "$WINGS_DATA_DIR/state" /var/log/oryz-wings
+  chown -R "$WINGS_USER:$WINGS_GROUP" "$WINGS_DATA_DIR" /var/log/oryz-wings
 
   write_wings_config
   install_wings_service

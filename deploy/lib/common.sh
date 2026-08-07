@@ -253,6 +253,27 @@ secure_env_file() {
   chmod 0640 "$file"
 }
 
+normalize_panel_permissions() {
+  # Reconcile permissions on every install/upgrade. This also repairs paths
+  # left behind by an interrupted run or by extracting an archive as root.
+  local storage="${STORAGE_PATH:-$ORYZ_STATE_DIR/storage}"
+
+  install -d -o "$ORYZ_USER" -g "$ORYZ_GROUP" -m 0750 \
+    "$ORYZ_HOME" "$ORYZ_APP_DIR" "$ORYZ_STATE_DIR" "$ORYZ_LOG_DIR" \
+    "$ORYZ_HOME/releases" "$ORYZ_HOME/proxy" "$storage"
+  install -d -o "$ORYZ_USER" -g "$ORYZ_GROUP" -m 0700 "$ORYZ_BACKUP_DIR"
+
+  # The application tree is private to the service account. Directories need
+  # execute permission for traversal. Preserve existing executable bits on
+  # package tools while removing all access for unrelated users.
+  chown -R "$ORYZ_USER:$ORYZ_GROUP" "$ORYZ_APP_DIR" "$ORYZ_STATE_DIR" "$ORYZ_LOG_DIR"
+  find "$ORYZ_APP_DIR" -type d -exec chmod u=rwx,g=rx,o= {} +
+  find "$ORYZ_APP_DIR" -type f -exec chmod u+rw,g+r,o-rwx {} +
+  find "$ORYZ_APP_DIR/deploy" -type f -name '*.sh' -exec chmod u=rwx,g=rx,o= {} + 2>/dev/null || true
+
+  [[ -f "$ORYZ_ENV_FILE" ]] && secure_env_file "$ORYZ_ENV_FILE"
+}
+
 redact() { printf '%s' "${1:0:2}****"; }
 
 # ---------------------------------------------------------------------------

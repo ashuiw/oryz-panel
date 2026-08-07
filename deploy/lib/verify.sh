@@ -90,17 +90,11 @@ check_services() {
 check_http() {
   step "HTTP and WebSocket"
   local code
-  code="$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:${APP_PORT}/api/health" 2>/dev/null || echo 000)"
-  if [[ "$code" =~ ^(200|204)$ ]]; then
-    _dx "Panel API" ok "health endpoint returned $code"
+  code="$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:${APP_PORT}/" 2>/dev/null || echo 000)"
+  if [[ "$code" =~ ^(200|204|301|302|307|308)$ ]]; then
+    _dx "Panel" ok "application returned $code"
   else
-    _dx "Panel API" fail "health endpoint returned $code" "journalctl -u oryz-api -n 50"
-  fi
-
-  if port_in_use "$WS_PORT"; then
-    _dx "WebSocket" ok "listening on 127.0.0.1:${WS_PORT}"
-  else
-    _dx "WebSocket" fail "nothing listening on ${WS_PORT}" "journalctl -u oryz-api -n 50"
+    _dx "Panel" fail "application returned $code" "journalctl -u oryz-web -n 50"
   fi
 
   if [[ "${SSL_MODE}" != "none" ]]; then
@@ -110,20 +104,6 @@ check_http() {
     else
       _dx "Public URL" warn "https://${APP_DOMAIN} returned $code" "check DNS, firewall and the reverse proxy"
     fi
-  fi
-}
-
-check_queue() {
-  step "Queues and scheduler"
-  if service_active oryz-queue.service && service_active oryz-worker.service; then
-    _dx "Workers" ok "queue and background workers running"
-  else
-    _dx "Workers" fail "one or more workers are down" "panelctl queue:restart"
-  fi
-  if service_active oryz-scheduler.service; then
-    _dx "Scheduler" ok "running"
-  else
-    _dx "Scheduler" fail "not running" "systemctl restart oryz-scheduler"
   fi
 }
 
@@ -172,9 +152,9 @@ check_ssl() {
 check_ports() {
   step "Ports"
   local p
-  for p in "$APP_PORT" "$WS_PORT"; do
+  for p in "$APP_PORT"; do
     if port_in_use "$p"; then _dx "Port $p" ok "bound by the panel"
-    else _dx "Port $p" fail "nothing listening" "systemctl status oryz-api"; fi
+    else _dx "Port $p" fail "nothing listening" "systemctl status oryz-web"; fi
   done
   if [[ "${PROXY_KIND}" != "none" ]]; then
     for p in 80 443; do
@@ -191,6 +171,12 @@ check_permissions() {
     _dx "App directory" ok "$ORYZ_APP_DIR owned by $owner"
   else
     _dx "App directory" fail "owned by $owner" "chown -R ${ORYZ_USER}:${ORYZ_GROUP} $ORYZ_APP_DIR"
+  fi
+  if runuser -u "$ORYZ_USER" -- test -r "$ORYZ_APP_DIR/package.json" &&
+     runuser -u "$ORYZ_USER" -- test -r "$ORYZ_ENV_FILE"; then
+    _dx "Runtime access" ok "service account can read application and configuration"
+  else
+    _dx "Runtime access" fail "service account cannot read required files" "run: panelctl permissions:repair"
   fi
   if [[ "$(stat -c '%a' "$ORYZ_BACKUP_DIR" 2>/dev/null)" == "700" ]]; then
     _dx "Backup directory" ok "0700"
@@ -216,7 +202,6 @@ run_doctor() {
   check_database
   check_redis
   check_services
-  check_queue
   check_http
   check_storage
   check_ssl
@@ -240,7 +225,7 @@ verify_installation() {
     check_row "Services" "all units active" ok
   else
     services_status
-    die "services did not become healthy — inspect: journalctl -u oryz-api -n 80"
+    die "services did not become healthy — inspect: journalctl -u oryz-web -n 80"
   fi
   DOCTOR_FAILURES=0; DOCTOR_WARNINGS=0
   check_database; check_redis; check_http; check_storage

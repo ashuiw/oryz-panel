@@ -1,8 +1,8 @@
 [Unit]
 Description=Oryz Panel web frontend (SSR renderer)
 PartOf=oryz.target
-After=oryz-api.service
-Requires=oryz-api.service
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
 
 [Service]
 Type=simple

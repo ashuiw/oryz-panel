@@ -63,8 +63,10 @@ bootstrap_auth_schema() {
 
   if [[ "${DB_MODE}" == "local" ]]; then
     # Superuser: can create the shared roles. Ownership is then handed to the
-    # panel role so later migrations may add triggers on auth.users.
-    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -d "$DB_NAME" -q -f "$sql"
+    # panel role so later migrations may add triggers on auth.users. Feed SQL
+    # over stdin: /opt/oryz is intentionally private, so the postgres OS user
+    # must never need filesystem access to the application source tree.
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -d "$DB_NAME" -q <"$sql"
     runuser -u postgres -- psql -v ON_ERROR_STOP=1 -d "$DB_NAME" -q -c "
       ALTER SCHEMA auth OWNER TO \"${DB_USER}\";
       ALTER TABLE auth.users OWNER TO \"${DB_USER}\";
