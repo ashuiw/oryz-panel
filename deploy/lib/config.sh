@@ -129,9 +129,10 @@ EOF
     ask_secret SUPABASE_SECRET_KEY "Backend service/secret key (optional, press enter to skip)" || true
   cat <<'EOF'
 
-  Google sign-in needs Google OAuth credentials configured on that backend.
-  Answer no unless you have already added them — otherwise the button on the
-  sign-in page leads to a "not found" provider page.
+  Google sign-in talks to Google directly from the browser using your own
+  OAuth "Web application" client ID. Create one at console.cloud.google.com,
+  add this panel's URL as an Authorised JavaScript origin, and paste the
+  client ID below. Leave blank to keep the Google button hidden.
 EOF
   if [[ -z "${GOOGLE_AUTH_ENABLED:-}" ]]; then
     if confirm "Enable the 'Continue with Google' button?" n; then
@@ -140,6 +141,10 @@ EOF
       GOOGLE_AUTH_ENABLED=false
     fi
   fi
+  if [[ "${GOOGLE_AUTH_ENABLED}" == "true" ]]; then
+    ask GOOGLE_CLIENT_ID "Google OAuth web client ID" "${GOOGLE_CLIENT_ID:-}"
+  fi
+
 
   if [[ -z "${SUPABASE_URL:-}" || -z "${SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
     warn "authentication backend not configured — sign-in is disabled until you run:
@@ -318,6 +323,8 @@ VITE_SUPABASE_URL=${SUPABASE_URL:-}
 VITE_SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY:-}
 SUPABASE_SECRET_KEY=${SUPABASE_SECRET_KEY:-}
 GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-false}
+GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+
 
 # --- setup wizard ----------------------------------------------------------
 # Flipped to false by the installer or by the web wizard on completion.

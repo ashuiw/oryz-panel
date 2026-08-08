@@ -29,6 +29,13 @@ import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authen
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin/users'
 import { Route as AuthenticatedServersIndexRouteImport } from './routes/_authenticated/servers/index'
 import { Route as AuthenticatedServersServerIdRouteImport } from './routes/_authenticated/servers/$serverId'
+import { Route as AuthenticatedServersServerIdIndexRouteImport } from './routes/_authenticated/servers/$serverId/index'
+import { Route as AuthenticatedServersServerIdBackupsRouteImport } from './routes/_authenticated/servers/$serverId/backups'
+import { Route as AuthenticatedServersServerIdDatabasesRouteImport } from './routes/_authenticated/servers/$serverId/databases'
+import { Route as AuthenticatedServersServerIdFilesRouteImport } from './routes/_authenticated/servers/$serverId/files'
+import { Route as AuthenticatedServersServerIdNetworkRouteImport } from './routes/_authenticated/servers/$serverId/network'
+import { Route as AuthenticatedServersServerIdSchedulesRouteImport } from './routes/_authenticated/servers/$serverId/schedules'
+import { Route as AuthenticatedServersServerIdSettingsRouteImport } from './routes/_authenticated/servers/$serverId/settings'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -136,6 +143,48 @@ const AuthenticatedServersServerIdRoute =
     path: '/servers/$serverId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedServersServerIdIndexRoute =
+  AuthenticatedServersServerIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedServersServerIdRoute,
+  } as any)
+const AuthenticatedServersServerIdBackupsRoute =
+  AuthenticatedServersServerIdBackupsRouteImport.update({
+    id: '/backups',
+    path: '/backups',
+    getParentRoute: () => AuthenticatedServersServerIdRoute,
+  } as any)
+const AuthenticatedServersServerIdDatabasesRoute =
+  AuthenticatedServersServerIdDatabasesRouteImport.update({
+    id: '/databases',
+    path: '/databases',
+    getParentRoute: () => AuthenticatedServersServerIdRoute,
+  } as any)
+const AuthenticatedServersServerIdFilesRoute =
+  AuthenticatedServersServerIdFilesRouteImport.update({
+    id: '/files',
+    path: '/files',
+    getParentRoute: () => AuthenticatedServersServerIdRoute,
+  } as any)
+const AuthenticatedServersServerIdNetworkRoute =
+  AuthenticatedServersServerIdNetworkRouteImport.update({
+    id: '/network',
+    path: '/network',
+    getParentRoute: () => AuthenticatedServersServerIdRoute,
+  } as any)
+const AuthenticatedServersServerIdSchedulesRoute =
+  AuthenticatedServersServerIdSchedulesRouteImport.update({
+    id: '/schedules',
+    path: '/schedules',
+    getParentRoute: () => AuthenticatedServersServerIdRoute,
+  } as any)
+const AuthenticatedServersServerIdSettingsRoute =
+  AuthenticatedServersServerIdSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => AuthenticatedServersServerIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -153,10 +202,17 @@ export interface FileRoutesByFullPath {
   '/admin/servers': typeof AuthenticatedAdminServersRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
-  '/servers/$serverId': typeof AuthenticatedServersServerIdRoute
+  '/servers/$serverId': typeof AuthenticatedServersServerIdRouteWithChildren
   '/account/': typeof AuthenticatedAccountIndexRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/servers/': typeof AuthenticatedServersIndexRoute
+  '/servers/$serverId/backups': typeof AuthenticatedServersServerIdBackupsRoute
+  '/servers/$serverId/databases': typeof AuthenticatedServersServerIdDatabasesRoute
+  '/servers/$serverId/files': typeof AuthenticatedServersServerIdFilesRoute
+  '/servers/$serverId/network': typeof AuthenticatedServersServerIdNetworkRoute
+  '/servers/$serverId/schedules': typeof AuthenticatedServersServerIdSchedulesRoute
+  '/servers/$serverId/settings': typeof AuthenticatedServersServerIdSettingsRoute
+  '/servers/$serverId/': typeof AuthenticatedServersServerIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -173,10 +229,16 @@ export interface FileRoutesByTo {
   '/admin/servers': typeof AuthenticatedAdminServersRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
-  '/servers/$serverId': typeof AuthenticatedServersServerIdRoute
   '/account': typeof AuthenticatedAccountIndexRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/servers': typeof AuthenticatedServersIndexRoute
+  '/servers/$serverId/backups': typeof AuthenticatedServersServerIdBackupsRoute
+  '/servers/$serverId/databases': typeof AuthenticatedServersServerIdDatabasesRoute
+  '/servers/$serverId/files': typeof AuthenticatedServersServerIdFilesRoute
+  '/servers/$serverId/network': typeof AuthenticatedServersServerIdNetworkRoute
+  '/servers/$serverId/schedules': typeof AuthenticatedServersServerIdSchedulesRoute
+  '/servers/$serverId/settings': typeof AuthenticatedServersServerIdSettingsRoute
+  '/servers/$serverId': typeof AuthenticatedServersServerIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -196,10 +258,17 @@ export interface FileRoutesById {
   '/_authenticated/admin/servers': typeof AuthenticatedAdminServersRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
-  '/_authenticated/servers/$serverId': typeof AuthenticatedServersServerIdRoute
+  '/_authenticated/servers/$serverId': typeof AuthenticatedServersServerIdRouteWithChildren
   '/_authenticated/account/': typeof AuthenticatedAccountIndexRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/servers/': typeof AuthenticatedServersIndexRoute
+  '/_authenticated/servers/$serverId/backups': typeof AuthenticatedServersServerIdBackupsRoute
+  '/_authenticated/servers/$serverId/databases': typeof AuthenticatedServersServerIdDatabasesRoute
+  '/_authenticated/servers/$serverId/files': typeof AuthenticatedServersServerIdFilesRoute
+  '/_authenticated/servers/$serverId/network': typeof AuthenticatedServersServerIdNetworkRoute
+  '/_authenticated/servers/$serverId/schedules': typeof AuthenticatedServersServerIdSchedulesRoute
+  '/_authenticated/servers/$serverId/settings': typeof AuthenticatedServersServerIdSettingsRoute
+  '/_authenticated/servers/$serverId/': typeof AuthenticatedServersServerIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -223,6 +292,13 @@ export interface FileRouteTypes {
     | '/account/'
     | '/admin/'
     | '/servers/'
+    | '/servers/$serverId/backups'
+    | '/servers/$serverId/databases'
+    | '/servers/$serverId/files'
+    | '/servers/$serverId/network'
+    | '/servers/$serverId/schedules'
+    | '/servers/$serverId/settings'
+    | '/servers/$serverId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -239,10 +315,16 @@ export interface FileRouteTypes {
     | '/admin/servers'
     | '/admin/settings'
     | '/admin/users'
-    | '/servers/$serverId'
     | '/account'
     | '/admin'
     | '/servers'
+    | '/servers/$serverId/backups'
+    | '/servers/$serverId/databases'
+    | '/servers/$serverId/files'
+    | '/servers/$serverId/network'
+    | '/servers/$serverId/schedules'
+    | '/servers/$serverId/settings'
+    | '/servers/$serverId'
   id:
     | '__root__'
     | '/'
@@ -265,6 +347,13 @@ export interface FileRouteTypes {
     | '/_authenticated/account/'
     | '/_authenticated/admin/'
     | '/_authenticated/servers/'
+    | '/_authenticated/servers/$serverId/backups'
+    | '/_authenticated/servers/$serverId/databases'
+    | '/_authenticated/servers/$serverId/files'
+    | '/_authenticated/servers/$serverId/network'
+    | '/_authenticated/servers/$serverId/schedules'
+    | '/_authenticated/servers/$serverId/settings'
+    | '/_authenticated/servers/$serverId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -417,6 +506,55 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedServersServerIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/servers/$serverId/': {
+      id: '/_authenticated/servers/$serverId/'
+      path: '/'
+      fullPath: '/servers/$serverId/'
+      preLoaderRoute: typeof AuthenticatedServersServerIdIndexRouteImport
+      parentRoute: typeof AuthenticatedServersServerIdRoute
+    }
+    '/_authenticated/servers/$serverId/backups': {
+      id: '/_authenticated/servers/$serverId/backups'
+      path: '/backups'
+      fullPath: '/servers/$serverId/backups'
+      preLoaderRoute: typeof AuthenticatedServersServerIdBackupsRouteImport
+      parentRoute: typeof AuthenticatedServersServerIdRoute
+    }
+    '/_authenticated/servers/$serverId/databases': {
+      id: '/_authenticated/servers/$serverId/databases'
+      path: '/databases'
+      fullPath: '/servers/$serverId/databases'
+      preLoaderRoute: typeof AuthenticatedServersServerIdDatabasesRouteImport
+      parentRoute: typeof AuthenticatedServersServerIdRoute
+    }
+    '/_authenticated/servers/$serverId/files': {
+      id: '/_authenticated/servers/$serverId/files'
+      path: '/files'
+      fullPath: '/servers/$serverId/files'
+      preLoaderRoute: typeof AuthenticatedServersServerIdFilesRouteImport
+      parentRoute: typeof AuthenticatedServersServerIdRoute
+    }
+    '/_authenticated/servers/$serverId/network': {
+      id: '/_authenticated/servers/$serverId/network'
+      path: '/network'
+      fullPath: '/servers/$serverId/network'
+      preLoaderRoute: typeof AuthenticatedServersServerIdNetworkRouteImport
+      parentRoute: typeof AuthenticatedServersServerIdRoute
+    }
+    '/_authenticated/servers/$serverId/schedules': {
+      id: '/_authenticated/servers/$serverId/schedules'
+      path: '/schedules'
+      fullPath: '/servers/$serverId/schedules'
+      preLoaderRoute: typeof AuthenticatedServersServerIdSchedulesRouteImport
+      parentRoute: typeof AuthenticatedServersServerIdRoute
+    }
+    '/_authenticated/servers/$serverId/settings': {
+      id: '/_authenticated/servers/$serverId/settings'
+      path: '/settings'
+      fullPath: '/servers/$serverId/settings'
+      preLoaderRoute: typeof AuthenticatedServersServerIdSettingsRouteImport
+      parentRoute: typeof AuthenticatedServersServerIdRoute
+    }
   }
 }
 
@@ -446,13 +584,46 @@ const AuthenticatedAdminRouteRouteWithChildren =
     AuthenticatedAdminRouteRouteChildren,
   )
 
+interface AuthenticatedServersServerIdRouteChildren {
+  AuthenticatedServersServerIdBackupsRoute: typeof AuthenticatedServersServerIdBackupsRoute
+  AuthenticatedServersServerIdDatabasesRoute: typeof AuthenticatedServersServerIdDatabasesRoute
+  AuthenticatedServersServerIdFilesRoute: typeof AuthenticatedServersServerIdFilesRoute
+  AuthenticatedServersServerIdNetworkRoute: typeof AuthenticatedServersServerIdNetworkRoute
+  AuthenticatedServersServerIdSchedulesRoute: typeof AuthenticatedServersServerIdSchedulesRoute
+  AuthenticatedServersServerIdSettingsRoute: typeof AuthenticatedServersServerIdSettingsRoute
+  AuthenticatedServersServerIdIndexRoute: typeof AuthenticatedServersServerIdIndexRoute
+}
+
+const AuthenticatedServersServerIdRouteChildren: AuthenticatedServersServerIdRouteChildren =
+  {
+    AuthenticatedServersServerIdBackupsRoute:
+      AuthenticatedServersServerIdBackupsRoute,
+    AuthenticatedServersServerIdDatabasesRoute:
+      AuthenticatedServersServerIdDatabasesRoute,
+    AuthenticatedServersServerIdFilesRoute:
+      AuthenticatedServersServerIdFilesRoute,
+    AuthenticatedServersServerIdNetworkRoute:
+      AuthenticatedServersServerIdNetworkRoute,
+    AuthenticatedServersServerIdSchedulesRoute:
+      AuthenticatedServersServerIdSchedulesRoute,
+    AuthenticatedServersServerIdSettingsRoute:
+      AuthenticatedServersServerIdSettingsRoute,
+    AuthenticatedServersServerIdIndexRoute:
+      AuthenticatedServersServerIdIndexRoute,
+  }
+
+const AuthenticatedServersServerIdRouteWithChildren =
+  AuthenticatedServersServerIdRoute._addFileChildren(
+    AuthenticatedServersServerIdRouteChildren,
+  )
+
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRouteRoute: typeof AuthenticatedAdminRouteRouteWithChildren
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedAccountActivityRoute: typeof AuthenticatedAccountActivityRoute
   AuthenticatedAccountApiRoute: typeof AuthenticatedAccountApiRoute
   AuthenticatedAccountSecurityRoute: typeof AuthenticatedAccountSecurityRoute
-  AuthenticatedServersServerIdRoute: typeof AuthenticatedServersServerIdRoute
+  AuthenticatedServersServerIdRoute: typeof AuthenticatedServersServerIdRouteWithChildren
   AuthenticatedAccountIndexRoute: typeof AuthenticatedAccountIndexRoute
   AuthenticatedServersIndexRoute: typeof AuthenticatedServersIndexRoute
 }
@@ -463,7 +634,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAccountActivityRoute: AuthenticatedAccountActivityRoute,
   AuthenticatedAccountApiRoute: AuthenticatedAccountApiRoute,
   AuthenticatedAccountSecurityRoute: AuthenticatedAccountSecurityRoute,
-  AuthenticatedServersServerIdRoute: AuthenticatedServersServerIdRoute,
+  AuthenticatedServersServerIdRoute:
+    AuthenticatedServersServerIdRouteWithChildren,
   AuthenticatedAccountIndexRoute: AuthenticatedAccountIndexRoute,
   AuthenticatedServersIndexRoute: AuthenticatedServersIndexRoute,
 }

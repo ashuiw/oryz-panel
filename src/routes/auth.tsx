@@ -51,6 +51,50 @@ const credentialsSchema = z.object({
 // exist on their backend, so the button never leads to a dead provider page.
 const googleEnabled = import.meta.env['VITE_ORYZ_GOOGLE_AUTH'] !== "false";
 
+// Direct Google sign-in: the browser talks to Google itself (Google Identity
+// Services), receives an ID token, and exchanges it for a panel session. No
+// provider redirect page is involved, so a misconfigured backend redirect can
+// never 404. Set VITE_GOOGLE_CLIENT_ID to your OAuth web client ID.
+const googleClientId = (import.meta.env['VITE_GOOGLE_CLIENT_ID'] ?? "") as string;
+
+interface GoogleCredentialResponse {
+  credential?: string;
+}
+
+interface GoogleIdentityApi {
+  accounts: {
+    id: {
+      initialize(config: {
+        client_id: string;
+        callback: (response: GoogleCredentialResponse) => void;
+        auto_select?: boolean;
+        use_fedcm_for_prompt?: boolean;
+      }): void;
+      prompt(): void;
+      renderButton(parent: HTMLElement, options: Record<string, unknown>): void;
+    };
+  };
+}
+
+function loadGoogleIdentity(): Promise<GoogleIdentityApi> {
+  const existing = (window as unknown as { google?: GoogleIdentityApi }).google;
+  if (existing?.accounts?.id) return Promise.resolve(existing);
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.onload = () => {
+      const api = (window as unknown as { google?: GoogleIdentityApi }).google;
+      if (api?.accounts?.id) resolve(api);
+      else reject(new Error("Google Identity Services failed to initialise"));
+    };
+    script.onerror = () => reject(new Error("Could not reach accounts.google.com"));
+    document.head.appendChild(script);
+  });
+}
+
+
 
 
 function AuthPage() {
@@ -111,10 +155,33 @@ function AuthPage() {
   async function handleGoogle() {
     setPending(true);
     try {
-      // The Lovable OAuth broker only serves Lovable-hosted origins. Self-hosted
-      // installs on their own domain go straight to the auth backend instead.
-      const brokered = /(^|\.)lovable\.(app|dev)$/.test(window.location.hostname);
+      // Preferred path: talk to Google directly with your own OAuth client ID.
+      if (googleClientId) {
+        const google = await loadGoogleIdentity();
+        const credential = await new Promise<string>((resolve, reject) => {
+          google.accounts.id.initialize({
+            client_id: googleClientId,
+            use_fedcm_for_prompt: true,
+            callback: (response) => {
+              if (response.credential) resolve(response.credential);
+              else reject(new Error("Google did not return an identity token"));
+            },
+          });
+          google.accounts.id.prompt();
+          window.setTimeout(() => reject(new Error("Google sign-in was dismissed")), 120_000);
+        });
 
+        const { error } = await supabase.auth.signInWithIdToken({
+          provider: "google",
+          token: credential,
+        });
+        if (error) throw error;
+        void navigate({ to: destination, replace: true });
+        return;
+      }
+
+      // The Lovable OAuth broker only serves Lovable-hosted origins.
+      const brokered = /(^|\.)lovable\.(app|dev)$/.test(window.location.hostname);
       if (brokered) {
         const result = await lovable.auth.signInWithOAuth("google", {
           redirect_uri: window.location.origin,
@@ -125,37 +192,18 @@ function AuthPage() {
         return;
       }
 
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          skipBrowserRedirect: true,
-          redirectTo: `${window.location.origin}/auth${
-            search.redirect ? `?redirect=${encodeURIComponent(search.redirect)}` : ""
-          }`,
-        },
-      });
-      if (error) throw error;
-      if (!data?.url) throw new Error("Google sign-in is not enabled on this backend");
-
-      // Probe first: an unconfigured provider answers 400/404 and would
-      // otherwise dump the user on a bare error page.
-      const probe = await fetch(data.url, { method: "GET", redirect: "manual" }).catch(
-        () => null,
+      throw new Error(
+        "Google sign-in is not configured. Set VITE_GOOGLE_CLIENT_ID (panelctl config set GOOGLE_CLIENT_ID …) and rebuild.",
       );
-      if (probe && probe.type !== "opaqueredirect" && probe.status >= 400) {
-        throw new Error(
-          "Google sign-in is not configured on this backend yet. Add Google credentials in the auth settings, then try again.",
-        );
-      }
-
-      window.location.href = data.url;
     } catch (error) {
-      setPending(false);
       toast.error(
         error instanceof Error ? error.message : "Google sign-in failed. Please try again.",
       );
+    } finally {
+      setPending(false);
     }
   }
+
 
 
   async function handleReset() {

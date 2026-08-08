@@ -423,10 +423,12 @@ export type Database = {
       }
       nodes: {
         Row: {
+          behind_proxy: boolean
           cpu_cores: number
           created_at: string
           daemon_port: number
           daemon_sftp_port: number
+          daemon_token: string
           daemon_token_id: string | null
           description: string | null
           disk_mb: number
@@ -449,10 +451,12 @@ export type Database = {
           upload_limit_mb: number
         }
         Insert: {
+          behind_proxy?: boolean
           cpu_cores?: number
           created_at?: string
           daemon_port?: number
           daemon_sftp_port?: number
+          daemon_token?: string
           daemon_token_id?: string | null
           description?: string | null
           disk_mb?: number
@@ -475,10 +479,12 @@ export type Database = {
           upload_limit_mb?: number
         }
         Update: {
+          behind_proxy?: boolean
           cpu_cores?: number
           created_at?: string
           daemon_port?: number
           daemon_sftp_port?: number
+          daemon_token?: string
           daemon_token_id?: string | null
           description?: string | null
           disk_mb?: number
