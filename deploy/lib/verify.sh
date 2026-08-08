@@ -8,8 +8,8 @@ _dx() {
   # _dx label state detail [remedy]
   local label="$1" state="$2" detail="$3" remedy="${4:-}"
   check_row "$label" "$detail" "$state"
-  [[ "$state" == "fail" ]] && { ((DOCTOR_FAILURES++)); [[ -n "$remedy" ]] && printf '        %s→ %s%s\n' "$C_DIM" "$remedy" "$C_RESET"; }
-  [[ "$state" == "warn" ]] && { ((DOCTOR_WARNINGS++)); [[ -n "$remedy" ]] && printf '        %s→ %s%s\n' "$C_DIM" "$remedy" "$C_RESET"; }
+  [[ "$state" == "fail" ]] && { ((DOCTOR_FAILURES += 1)); [[ -n "$remedy" ]] && printf '        %s→ %s%s\n' "$C_DIM" "$remedy" "$C_RESET"; }
+  [[ "$state" == "warn" ]] && { ((DOCTOR_WARNINGS += 1)); [[ -n "$remedy" ]] && printf '        %s→ %s%s\n' "$C_DIM" "$remedy" "$C_RESET"; }
   return 0
 }
 

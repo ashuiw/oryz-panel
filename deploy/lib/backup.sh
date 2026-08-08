@@ -69,7 +69,7 @@ backup_list() {
 backup_prune() {
   local keep="${1:-10}" f count=0
   while IFS= read -r f; do
-    ((count++))
+    ((count += 1))
     if (( count > keep )); then rm -f "$f" "${f}.sha256"; log "pruned $(basename "$f")"; fi
   done < <(ls -1t "$ORYZ_BACKUP_DIR"/oryz-*.tar.gz 2>/dev/null || true)
 }

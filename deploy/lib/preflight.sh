@@ -115,7 +115,7 @@ run_preflight() {
 
   case "$ARCH" in
     x86_64|aarch64) check_row "Architecture" "$ARCH" ok ;;
-    *) check_row "Architecture" "$ARCH" fail; ((failures++)) ;;
+    *) check_row "Architecture" "$ARCH" fail; ((failures += 1)) ;;
   esac
 
   check_row "Virtualization" "$VIRT_TYPE" ok
@@ -133,26 +133,26 @@ run_preflight() {
     check_row "Memory" "${RAM_MB} MB (min ${MIN_RAM_MB} MB)" ok
   else
     check_row "Memory" "${RAM_MB} MB (min ${MIN_RAM_MB} MB)" fail
-    ((failures++))
+    ((failures += 1))
   fi
 
   if (( DISK_MB >= MIN_DISK_MB )); then
     check_row "Free disk" "${DISK_MB} MB (min ${MIN_DISK_MB} MB)" ok
   else
     check_row "Free disk" "${DISK_MB} MB (min ${MIN_DISK_MB} MB)" fail
-    ((failures++))
+    ((failures += 1))
   fi
 
   if has_cmd systemctl; then
     check_row "Init system" "systemd" ok
   else
-    check_row "Init system" "systemd not found" fail; ((failures++))
+    check_row "Init system" "systemd not found" fail; ((failures += 1))
   fi
 
   if getent hosts deb.debian.org >/dev/null 2>&1 || getent hosts archive.ubuntu.com >/dev/null 2>&1; then
     check_row "Network / DNS" "reachable" ok
   else
-    check_row "Network / DNS" "package mirrors unreachable" fail; ((failures++))
+    check_row "Network / DNS" "package mirrors unreachable" fail; ((failures += 1))
   fi
 
   if detect_conflicts; then

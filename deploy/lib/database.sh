@@ -115,12 +115,12 @@ SQL
     if [[ -n "$recorded" ]]; then
       [[ "$recorded" == "$checksum" ]] ||
         warn "migration ${version} changed since it was applied — the panel will not re-run it"
-      ((skipped++)); continue
+      ((skipped += 1)); continue
     fi
     log "applying ${version}…"
     psql_app -q --single-transaction -f "$file"
     psql_app -q -c "INSERT INTO schema_migrations (version, checksum) VALUES ('${version}', '${checksum}')"
-    ((applied++))
+    ((applied += 1))
   done
   shopt -u nullglob
   check_row "Migrations" "${applied} applied, ${skipped} already current" ok
