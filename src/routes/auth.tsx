@@ -104,16 +104,36 @@ function AuthPage() {
 
   async function handleGoogle() {
     setPending(true);
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    if (result.error) {
+    try {
+      // The Lovable OAuth broker only serves Lovable-hosted origins. Self-hosted
+      // installs on their own domain go straight to the auth backend instead.
+      const brokered = /(^|\.)lovable\.(app|dev)$/.test(window.location.hostname);
+
+      if (brokered) {
+        const result = await lovable.auth.signInWithOAuth("google", {
+          redirect_uri: window.location.origin,
+        });
+        if (result.error) throw result.error;
+        if (result.redirected) return;
+        void navigate({ to: destination, replace: true });
+        return;
+      }
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth${
+            search.redirect ? `?redirect=${encodeURIComponent(search.redirect)}` : ""
+          }`,
+        },
+      });
+      if (error) throw error;
+    } catch (error) {
       setPending(false);
-      toast.error("Google sign-in failed. Please try again.");
-      return;
+      toast.error(
+        error instanceof Error ? error.message : "Google sign-in failed. Please try again.",
+      );
     }
-    if (result.redirected) return;
-    void navigate({ to: destination, replace: true });
   }
 
   async function handleReset() {

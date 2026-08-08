@@ -65,6 +65,7 @@ ${C_BOLD}panelctl${C_RESET} — ${ORYZ_NAME} administration CLI (v${PANELCTL_VER
     config set KEY VALUE   Update a configuration value and restart services
     config list            List configuration keys (secret values redacted)
     config edit            Open the configuration file in \$EDITOR
+    admin:create [EMAIL]   Create/reset the administrator in the auth backend
     ssl renew              Renew or re-issue the TLS certificate
     ssl status             Show certificate details
 
@@ -259,6 +260,25 @@ cmd_update() {
   exec bash "$updater" "$@"
 }
 
+# Create or reset the administrator account in the configured auth backend.
+cmd_admin_create() {
+  require_root; need_config
+  ADMIN_EMAIL="${1:-${ADMIN_EMAIL:-}}"
+  [[ -n "$ADMIN_EMAIL" ]] || { read -rp "Administrator email: " ADMIN_EMAIL; }
+  ADMIN_NAME="${ADMIN_NAME:-Administrator}"
+  if [[ -z "${ADMIN_PASSWORD:-}" ]]; then
+    read -rsp "Administrator password (min 12 chars): " ADMIN_PASSWORD; echo
+    (( ${#ADMIN_PASSWORD} >= 12 )) || die "password must be at least 12 characters"
+  fi
+  [[ -n "$(env_get SUPABASE_URL || true)" ]] || die "SUPABASE_URL is not configured"
+  [[ -n "$(env_get SUPABASE_SECRET_KEY || true)" ]] ||
+    die "SUPABASE_SECRET_KEY is not configured — panelctl config set SUPABASE_SECRET_KEY …"
+  SUPABASE_URL="$(env_get SUPABASE_URL)"
+  SUPABASE_SECRET_KEY="$(env_get SUPABASE_SECRET_KEY)"
+  create_admin_in_backend || die "administrator could not be created"
+  success "sign in at $(env_get APP_URL) with ${ADMIN_EMAIL}"
+}
+
 # Recompile the installed source, reinstall units, and refresh the proxy policy.
 cmd_rebuild() {
   require_root; need_config
@@ -370,6 +390,7 @@ main() {
     uninstall)      cmd_uninstall "$@" ;;
     doctor)         cmd_doctor "$@" ;;
     permissions:repair) cmd_permissions_repair ;;
+    admin:create|admin) cmd_admin_create "$@" ;;
     status)         cmd_status "$@" ;;
     start)          cmd_start ;;
     stop)           cmd_stop ;;

@@ -118,6 +118,15 @@ collect_auth_config() {
 EOF
   ask SUPABASE_URL "Backend API URL (https://…)" "${SUPABASE_URL:-}"
   ask SUPABASE_PUBLISHABLE_KEY "Backend publishable/anon key" "${SUPABASE_PUBLISHABLE_KEY:-}"
+  cat <<'EOF'
+
+  The service/secret key is optional. When provided, the installer creates the
+  administrator account directly in the hosted backend (already confirmed, no
+  email required). Without it you must register the first account yourself from
+  the panel's sign-in page — the first account always becomes the owner.
+EOF
+  [[ -n "${SUPABASE_SECRET_KEY:-}" ]] ||
+    ask_secret SUPABASE_SECRET_KEY "Backend service/secret key (optional, press enter to skip)" || true
   if [[ -z "${SUPABASE_URL:-}" || -z "${SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
     warn "authentication backend not configured — sign-in is disabled until you run:
         panelctl config set SUPABASE_URL https://…
@@ -283,6 +292,16 @@ CURSEFORGE_API_KEY=${CURSEFORGE_API_KEY:-}
 WINGS_INSTALLED=${INSTALL_WINGS:-no}
 WINGS_CONF_FILE=${WINGS_CONF_FILE:-}
 WINGS_NODE_UUID=${WINGS_NODE_UUID:-}
+
+# --- authentication backend ------------------------------------------------
+# The first two are inlined into the browser bundle at build time; run
+# \`panelctl rebuild\` after changing them. The secret key stays server-side and
+# is only used by \`panelctl admin:create\`.
+SUPABASE_URL=${SUPABASE_URL:-}
+SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY:-}
+VITE_SUPABASE_URL=${SUPABASE_URL:-}
+VITE_SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY:-}
+SUPABASE_SECRET_KEY=${SUPABASE_SECRET_KEY:-}
 
 # --- setup wizard ----------------------------------------------------------
 # Flipped to false by the installer or by the web wizard on completion.

@@ -138,8 +138,84 @@ seed_initial_data() {
   fi
 }
 
+# Escape a value for embedding in a JSON string literal.
+json_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\t'/\\t}"
+  printf '%s' "$s"
+}
+
+# Create (or reset the password of) the administrator in the hosted auth
+# backend. The panel UI signs in against that backend, so the account MUST
+# live there — a row in the local Postgres `auth.users` shim can never sign in.
+create_admin_in_backend() {
+  local url="${SUPABASE_URL%/}" key="$SUPABASE_SECRET_KEY"
+  local email name password body http out
+  email="$(json_escape "$ADMIN_EMAIL")"
+  name="$(json_escape "${ADMIN_NAME:-Administrator}")"
+  password="$(json_escape "$ADMIN_PASSWORD")"
+  body="{\"email\":\"${email}\",\"password\":\"${password}\",\"email_confirm\":true,\"user_metadata\":{\"display_name\":\"${name}\"}}"
+
+  out="$(mktemp)"; chmod 0600 "$out"
+  http="$(curl -sS -o "$out" -w '%{http_code}' -X POST "${url}/auth/v1/admin/users" \
+    -H "apikey: ${key}" -H "Authorization: Bearer ${key}" \
+    -H 'Content-Type: application/json' --data-binary "$body" || echo 000)"
+
+  if [[ "$http" == "200" || "$http" == "201" ]]; then
+    rm -f "$out"
+    check_row "Administrator" "${ADMIN_EMAIL} created in the auth backend" ok
+    return 0
+  fi
+
+  # Already registered: look the user up and reset the password instead.
+  if grep -qi 'already been registered\|email_exists\|already exists' "$out"; then
+    local list uid
+    list="$(curl -sS "${url}/auth/v1/admin/users?page=1&per_page=200" \
+      -H "apikey: ${key}" -H "Authorization: Bearer ${key}" || true)"
+    uid="$(printf '%s' "$list" | python3 -c 'import json,sys
+data=json.load(sys.stdin)
+target=sys.argv[1].lower()
+for u in data.get("users", []):
+    if (u.get("email") or "").lower()==target:
+        print(u["id"]); break' "$ADMIN_EMAIL" 2>/dev/null || true)"
+    if [[ -n "$uid" ]]; then
+      http="$(curl -sS -o "$out" -w '%{http_code}' -X PUT "${url}/auth/v1/admin/users/${uid}" \
+        -H "apikey: ${key}" -H "Authorization: Bearer ${key}" \
+        -H 'Content-Type: application/json' \
+        --data-binary "{\"password\":\"${password}\",\"email_confirm\":true}" || echo 000)"
+      if [[ "$http" == "200" ]]; then
+        rm -f "$out"
+        check_row "Administrator" "${ADMIN_EMAIL} password reset in the auth backend" ok
+        return 0
+      fi
+    fi
+  fi
+
+  warn "could not create the administrator in the auth backend (HTTP ${http}): $(awk 'NR==1' "$out")"
+  rm -f "$out"
+  return 1
+}
+
 create_admin_account() {
   step "Administrator account"
+
+  if [[ -n "${SUPABASE_URL:-}" ]]; then
+    if [[ -z "${SUPABASE_SECRET_KEY:-}" ]]; then
+      warn "no backend service key configured — the administrator cannot be created automatically.
+        Open ${PANEL_URL}/auth and register ${ADMIN_EMAIL}; the first account becomes the owner.
+        Or set the key and retry:  panelctl config set SUPABASE_SECRET_KEY … && panelctl admin:create"
+      return 0
+    fi
+    create_admin_in_backend && return 0
+    return 0
+  fi
+
+  # Local Postgres shim (no hosted auth backend configured).
+
   # The password is passed as a psql variable, never interpolated into SQL text
   # and never written to argv of another process; hashing uses pgcrypto bcrypt.
   local sql; sql="$(mktemp)"; chmod 0600 "$sql"
