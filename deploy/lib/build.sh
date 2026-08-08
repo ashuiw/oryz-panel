@@ -86,6 +86,12 @@ build_application() {
           panelctl config set GOOGLE_CLIENT_ID …apps.googleusercontent.com"
   fi
 
+  # A previous build's .output must go before the new one is written. Mixing
+  # generations leaves the SSR bundle referencing asset hashes that no longer
+  # exist on disk, which serves a blank page with 404s on /assets/*.js.
+  log "clearing previous build output…"
+  run_as_app "rm -rf .output .vite node_modules/.vite 2>/dev/null" || true
+
   log "building the panel (Node server target)…"
   run_as_app "NODE_ENV=production NITRO_PRESET=node-server SERVER_PRESET=node-server \
     VITE_SUPABASE_URL='${sb_url}' VITE_SUPABASE_PUBLISHABLE_KEY='${sb_key}' \
