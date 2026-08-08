@@ -74,7 +74,7 @@ http:
         customResponseHeaders:
           Permissions-Policy: "geolocation=(), microphone=(), camera=(), payment=()"
           Server: ""
-        contentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' wss: https:; worker-src 'self' blob:; frame-ancestors 'self'; base-uri 'self'; object-src 'none'"
+        contentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline'; script-src-attr 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' wss: https:; worker-src 'self' blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"
 
 tls:
   options:
