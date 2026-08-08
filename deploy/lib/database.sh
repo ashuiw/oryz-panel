@@ -182,6 +182,23 @@ for u in data.get("users", []):
         print(u["id"]); break' "$mail" 2>/dev/null || true
 }
 
+# Grant the owner role directly in Postgres. Used when the REST API cannot see
+# public.user_roles (PGRST205 — table missing from the schema cache, or the app
+# schema living in a database PostgREST does not expose).
+promote_admin_role_sql() {
+  local uid="$1"
+  [[ -n "${DB_NAME:-}" && -n "${DB_USER:-}" && -n "${DB_PASSWORD:-}" ]] || return 1
+  psql_app -q -v ON_ERROR_STOP=1 -v uid="$uid" <<'SQL' >/dev/null 2>&1 || return 1
+INSERT INTO public.user_roles (user_id, role)
+VALUES (:'uid'::uuid, 'owner'::public.app_role)
+ON CONFLICT (user_id, role) DO NOTHING;
+DELETE FROM public.user_roles WHERE user_id = :'uid'::uuid AND role = 'user'::public.app_role;
+SQL
+  # Ask PostgREST to pick up any schema changes so the panel sees the role.
+  psql_app -q -c "NOTIFY pgrst, 'reload schema'" >/dev/null 2>&1 || true
+  return 0
+}
+
 # Grant the owner role. The signup trigger only auto-assigns `owner` to the very
 # first account, so every later administrator must be promoted explicitly.
 promote_admin_role() {
@@ -203,10 +220,25 @@ promote_admin_role() {
     return 0
   fi
 
-  warn "could not grant the owner role (HTTP ${http}): $(awk 'NR==1' "$out")"
+  local detail; detail="$(awk 'NR==1' "$out")"
   rm -f "$out"
+
+  # Fall back to writing the grant straight into Postgres.
+  if promote_admin_role_sql "$uid"; then
+    check_row "Administrator role" "owner granted directly in the database" ok
+    return 0
+  fi
+
+  warn "could not grant the owner role (HTTP ${http}): ${detail}"
+  if [[ "$detail" == *PGRST205* ]]; then
+    warn "the auth backend at ${url} has no public.user_roles table.
+        The panel's schema lives in a different database than the one this URL serves.
+        Point SUPABASE_URL/SUPABASE_SECRET_KEY at the backend that holds the panel schema
+        (panelctl config set SUPABASE_URL …) and retry, or run the panel migrations there."
+  fi
   return 1
 }
+
 
 # Create (or reset the password of) the administrator in the hosted auth
 # backend. The panel UI signs in against that backend, so the account MUST

@@ -6,7 +6,7 @@
 
 set -Eeuo pipefail
 
-PANELCTL_VERSION="1.0.2"
+PANELCTL_VERSION="1.0.3"
 
 # Resolve the library directory: prefer the installed app, fall back to the
 # repository layout when running from a checkout.
