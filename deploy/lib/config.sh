@@ -127,6 +127,20 @@ EOF
 EOF
   [[ -n "${SUPABASE_SECRET_KEY:-}" ]] ||
     ask_secret SUPABASE_SECRET_KEY "Backend service/secret key (optional, press enter to skip)" || true
+  cat <<'EOF'
+
+  Google sign-in needs Google OAuth credentials configured on that backend.
+  Answer no unless you have already added them — otherwise the button on the
+  sign-in page leads to a "not found" provider page.
+EOF
+  if [[ -z "${GOOGLE_AUTH_ENABLED:-}" ]]; then
+    if confirm "Enable the 'Continue with Google' button?" n; then
+      GOOGLE_AUTH_ENABLED=true
+    else
+      GOOGLE_AUTH_ENABLED=false
+    fi
+  fi
+
   if [[ -z "${SUPABASE_URL:-}" || -z "${SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
     warn "authentication backend not configured — sign-in is disabled until you run:
         panelctl config set SUPABASE_URL https://…
@@ -136,6 +150,7 @@ EOF
     check_row "Backend" "${SUPABASE_URL}" ok
   fi
 }
+
 
 collect_admin_config() {
   step "Administrator account"
@@ -302,6 +317,7 @@ SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY:-}
 VITE_SUPABASE_URL=${SUPABASE_URL:-}
 VITE_SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY:-}
 SUPABASE_SECRET_KEY=${SUPABASE_SECRET_KEY:-}
+GOOGLE_AUTH_ENABLED=${GOOGLE_AUTH_ENABLED:-false}
 
 # --- setup wizard ----------------------------------------------------------
 # Flipped to false by the installer or by the web wizard on completion.

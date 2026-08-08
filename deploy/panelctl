@@ -6,7 +6,7 @@
 
 set -Eeuo pipefail
 
-PANELCTL_VERSION="1.0.1"
+PANELCTL_VERSION="1.0.2"
 
 # Resolve the library directory: prefer the installed app, fall back to the
 # repository layout when running from a checkout.
@@ -66,6 +66,7 @@ ${C_BOLD}panelctl${C_RESET} — ${ORYZ_NAME} administration CLI (v${PANELCTL_VER
     config list            List configuration keys (secret values redacted)
     config edit            Open the configuration file in \$EDITOR
     admin:create [EMAIL]   Create/reset the administrator in the auth backend
+    admin:promote EMAIL    Grant the owner role to an existing account
     ssl renew              Renew or re-issue the TLS certificate
     ssl status             Show certificate details
 
@@ -276,7 +277,21 @@ cmd_admin_create() {
   SUPABASE_URL="$(env_get SUPABASE_URL)"
   SUPABASE_SECRET_KEY="$(env_get SUPABASE_SECRET_KEY)"
   create_admin_in_backend || die "administrator could not be created"
-  success "sign in at $(env_get APP_URL) with ${ADMIN_EMAIL}"
+  success "sign in at $(env_get APP_URL) with ${ADMIN_EMAIL} (owner)"
+}
+
+# Promote an already-registered account to owner (no password change).
+cmd_admin_promote() {
+  require_root; need_config
+  ADMIN_EMAIL="${1:-}"
+  [[ -n "$ADMIN_EMAIL" ]] || { read -rp "Account email: " ADMIN_EMAIL; }
+  [[ -n "$(env_get SUPABASE_URL || true)" ]] || die "SUPABASE_URL is not configured"
+  [[ -n "$(env_get SUPABASE_SECRET_KEY || true)" ]] ||
+    die "SUPABASE_SECRET_KEY is not configured — panelctl config set SUPABASE_SECRET_KEY …"
+  SUPABASE_URL="$(env_get SUPABASE_URL)"
+  SUPABASE_SECRET_KEY="$(env_get SUPABASE_SECRET_KEY)"
+  promote_admin_email || die "the owner role could not be granted"
+  success "${ADMIN_EMAIL} is now an owner — sign out and back in to refresh the session"
 }
 
 # Recompile the installed source, reinstall units, and refresh the proxy policy.
@@ -391,6 +406,7 @@ main() {
     doctor)         cmd_doctor "$@" ;;
     permissions:repair) cmd_permissions_repair ;;
     admin:create|admin) cmd_admin_create "$@" ;;
+    admin:promote) cmd_admin_promote "$@" ;;
     status)         cmd_status "$@" ;;
     start)          cmd_start ;;
     stop)           cmd_stop ;;

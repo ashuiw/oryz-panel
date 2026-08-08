@@ -149,47 +149,102 @@ json_escape() {
   printf '%s' "$s"
 }
 
+# Auth headers for the backend admin/REST APIs.
+#
+# Legacy service keys are JWTs and must be sent as a bearer token; the newer
+# opaque `sb_secret_…` keys are NOT JWTs and are rejected when sent as one, so
+# they travel in the `apikey` header alone.
+sb_auth_headers() {
+  local key="$1"
+  printf '%s\n' "apikey: ${key}"
+  if [[ "$key" == *.*.* ]]; then printf '%s\n' "Authorization: Bearer ${key}"; fi
+}
+
+sb_curl() {
+  # usage: sb_curl <key> <curl args…>
+  local key="$1"; shift
+  local -a hdrs=()
+  local line
+  while IFS= read -r line; do hdrs+=(-H "$line"); done < <(sb_auth_headers "$key")
+  curl -sS "${hdrs[@]}" "$@"
+}
+
+# Look up a backend user id by email address.
+sb_user_id() {
+  local url="${1%/}" key="$2" mail="$3" list
+  list="$(sb_curl "$key" "${url}/auth/v1/admin/users?page=1&per_page=1000" || true)"
+  printf '%s' "$list" | python3 -c 'import json,sys
+try: data=json.load(sys.stdin)
+except Exception: sys.exit(0)
+target=sys.argv[1].lower()
+for u in data.get("users", []):
+    if (u.get("email") or "").lower()==target:
+        print(u["id"]); break' "$mail" 2>/dev/null || true
+}
+
+# Grant the owner role. The signup trigger only auto-assigns `owner` to the very
+# first account, so every later administrator must be promoted explicitly.
+promote_admin_role() {
+  local url="${1%/}" key="$2" uid="$3" http out
+  [[ -n "$uid" ]] || { warn "administrator id could not be resolved — role not granted"; return 1; }
+
+  out="$(mktemp)"; chmod 0600 "$out"
+  http="$(sb_curl "$key" -o "$out" -w '%{http_code}' -X POST "${url}/rest/v1/user_roles" \
+    -H 'Content-Type: application/json' \
+    -H 'Prefer: resolution=merge-duplicates,return=minimal' \
+    --data-binary "[{\"user_id\":\"${uid}\",\"role\":\"owner\"}]" || echo 000)"
+
+  if [[ "$http" == 2* ]]; then
+    # Drop the default "user" grade so the account reads as owner everywhere.
+    sb_curl "$key" -o /dev/null -X DELETE \
+      "${url}/rest/v1/user_roles?user_id=eq.${uid}&role=eq.user" >/dev/null 2>&1 || true
+    rm -f "$out"
+    check_row "Administrator role" "owner granted" ok
+    return 0
+  fi
+
+  warn "could not grant the owner role (HTTP ${http}): $(awk 'NR==1' "$out")"
+  rm -f "$out"
+  return 1
+}
+
 # Create (or reset the password of) the administrator in the hosted auth
 # backend. The panel UI signs in against that backend, so the account MUST
 # live there — a row in the local Postgres `auth.users` shim can never sign in.
 create_admin_in_backend() {
   local url="${SUPABASE_URL%/}" key="$SUPABASE_SECRET_KEY"
-  local email name password body http out
+  local email name password body http out uid=""
   email="$(json_escape "$ADMIN_EMAIL")"
   name="$(json_escape "${ADMIN_NAME:-Administrator}")"
   password="$(json_escape "$ADMIN_PASSWORD")"
   body="{\"email\":\"${email}\",\"password\":\"${password}\",\"email_confirm\":true,\"user_metadata\":{\"display_name\":\"${name}\"}}"
 
   out="$(mktemp)"; chmod 0600 "$out"
-  http="$(curl -sS -o "$out" -w '%{http_code}' -X POST "${url}/auth/v1/admin/users" \
-    -H "apikey: ${key}" -H "Authorization: Bearer ${key}" \
+  http="$(sb_curl "$key" -o "$out" -w '%{http_code}' -X POST "${url}/auth/v1/admin/users" \
     -H 'Content-Type: application/json' --data-binary "$body" || echo 000)"
 
   if [[ "$http" == "200" || "$http" == "201" ]]; then
+    uid="$(python3 -c 'import json,sys
+try: print(json.load(open(sys.argv[1])).get("id",""))
+except Exception: pass' "$out" 2>/dev/null || true)"
     rm -f "$out"
     check_row "Administrator" "${ADMIN_EMAIL} created in the auth backend" ok
+    [[ -n "$uid" ]] || uid="$(sb_user_id "$url" "$key" "$ADMIN_EMAIL")"
+    promote_admin_role "$url" "$key" "$uid" || true
     return 0
   fi
 
   # Already registered: look the user up and reset the password instead.
   if grep -qi 'already been registered\|email_exists\|already exists' "$out"; then
-    local list uid
-    list="$(curl -sS "${url}/auth/v1/admin/users?page=1&per_page=200" \
-      -H "apikey: ${key}" -H "Authorization: Bearer ${key}" || true)"
-    uid="$(printf '%s' "$list" | python3 -c 'import json,sys
-data=json.load(sys.stdin)
-target=sys.argv[1].lower()
-for u in data.get("users", []):
-    if (u.get("email") or "").lower()==target:
-        print(u["id"]); break' "$ADMIN_EMAIL" 2>/dev/null || true)"
+    uid="$(sb_user_id "$url" "$key" "$ADMIN_EMAIL")"
     if [[ -n "$uid" ]]; then
-      http="$(curl -sS -o "$out" -w '%{http_code}' -X PUT "${url}/auth/v1/admin/users/${uid}" \
-        -H "apikey: ${key}" -H "Authorization: Bearer ${key}" \
+      http="$(sb_curl "$key" -o "$out" -w '%{http_code}' -X PUT "${url}/auth/v1/admin/users/${uid}" \
         -H 'Content-Type: application/json' \
         --data-binary "{\"password\":\"${password}\",\"email_confirm\":true}" || echo 000)"
       if [[ "$http" == "200" ]]; then
         rm -f "$out"
         check_row "Administrator" "${ADMIN_EMAIL} password reset in the auth backend" ok
+        promote_admin_role "$url" "$key" "$uid" || true
         return 0
       fi
     fi
@@ -199,6 +254,15 @@ for u in data.get("users", []):
   rm -f "$out"
   return 1
 }
+
+# Promote an existing backend account to owner without touching its password.
+promote_admin_email() {
+  local url="${SUPABASE_URL%/}" key="$SUPABASE_SECRET_KEY" uid
+  uid="$(sb_user_id "$url" "$key" "$ADMIN_EMAIL")"
+  [[ -n "$uid" ]] || die "no account with email ${ADMIN_EMAIL} exists in the auth backend"
+  promote_admin_role "$url" "$key" "$uid"
+}
+
 
 create_admin_account() {
   step "Administrator account"

@@ -47,6 +47,12 @@ const credentialsSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters").max(128),
 });
 
+// Self-hosted installs set VITE_ORYZ_GOOGLE_AUTH=false until Google credentials
+// exist on their backend, so the button never leads to a dead provider page.
+const googleEnabled = import.meta.env['VITE_ORYZ_GOOGLE_AUTH'] !== "false";
+
+
+
 function AuthPage() {
   const navigate = useNavigate();
   const search = Route.useSearch();
@@ -119,15 +125,30 @@ function AuthPage() {
         return;
       }
 
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
+          skipBrowserRedirect: true,
           redirectTo: `${window.location.origin}/auth${
             search.redirect ? `?redirect=${encodeURIComponent(search.redirect)}` : ""
           }`,
         },
       });
       if (error) throw error;
+      if (!data?.url) throw new Error("Google sign-in is not enabled on this backend");
+
+      // Probe first: an unconfigured provider answers 400/404 and would
+      // otherwise dump the user on a bare error page.
+      const probe = await fetch(data.url, { method: "GET", redirect: "manual" }).catch(
+        () => null,
+      );
+      if (probe && probe.type !== "opaqueredirect" && probe.status >= 400) {
+        throw new Error(
+          "Google sign-in is not configured on this backend yet. Add Google credentials in the auth settings, then try again.",
+        );
+      }
+
+      window.location.href = data.url;
     } catch (error) {
       setPending(false);
       toast.error(
@@ -135,6 +156,7 @@ function AuthPage() {
       );
     }
   }
+
 
   async function handleReset() {
     const parsed = z.string().email().safeParse(email.trim());
@@ -245,7 +267,7 @@ function AuthPage() {
             </TabsContent>
           </Tabs>
 
-          {!emailSent && (
+          {!emailSent && googleEnabled && (
             <>
               <div className="my-5 flex items-center gap-3">
                 <div className="h-px flex-1 bg-border" />

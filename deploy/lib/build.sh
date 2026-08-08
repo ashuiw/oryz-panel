@@ -69,7 +69,8 @@ build_application() {
   # Vite inlines VITE_* at build time. Without them the generated backend
   # client throws on first use in the browser, hydration dies and every page
   # renders blank after the SSR HTML flashes.
-  local sb_url sb_key
+  local sb_url sb_key google_auth
+  google_auth="$(env_get GOOGLE_AUTH_ENABLED || true)"; google_auth="${google_auth:-false}"
   sb_url="$(env_get VITE_SUPABASE_URL || true)"; sb_url="${sb_url:-$(env_get SUPABASE_URL || true)}"
   sb_key="$(env_get VITE_SUPABASE_PUBLISHABLE_KEY || true)"; sb_key="${sb_key:-$(env_get SUPABASE_PUBLISHABLE_KEY || true)}"
   if [[ -z "$sb_url" || -z "$sb_key" ]]; then
@@ -82,6 +83,7 @@ build_application() {
   log "building the panel (Node server target)…"
   run_as_app "NODE_ENV=production NITRO_PRESET=node-server SERVER_PRESET=node-server \
     VITE_SUPABASE_URL='${sb_url}' VITE_SUPABASE_PUBLISHABLE_KEY='${sb_key}' \
+    VITE_ORYZ_GOOGLE_AUTH='${google_auth}' \
     pnpm run build" >/dev/null
 
   local entry="$ORYZ_APP_DIR/.output/server/index.mjs"
