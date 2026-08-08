@@ -6,10 +6,21 @@ fetch_release() {
 
   # Running from a checkout (git clone / extracted tarball)? Use it directly
   # instead of downloading a release the user may not have published yet.
-  if [[ -z "${ORYZ_SOURCE_DIR:-}" && -f "$SCRIPT_DIR/../package.json" ]]; then
+  if [[ -z "${ORYZ_SOURCE_DIR:-}" && -n "${SCRIPT_DIR:-}" && -f "$SCRIPT_DIR/../package.json" ]]; then
     ORYZ_SOURCE_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
     info "using the local checkout at ${ORYZ_SOURCE_DIR}"
   fi
+
+  # `panelctl rebuild` runs from the installed copy: its SCRIPT_DIR resolves to
+  # /opt/oryz/app/deploy, so the "checkout" is the install itself. Copying it
+  # over itself would be pointless (and clobber files mid-read).
+  if [[ "${ORYZ_SOURCE_DIR:-}" == "$ORYZ_APP_DIR" ]]; then
+    unset ORYZ_SOURCE_DIR
+    normalize_panel_permissions
+    check_row "Source" "installed copy reused" ok
+    return 0
+  fi
+
 
   if [[ -n "${ORYZ_SOURCE_DIR:-}" ]]; then
     [[ -f "$ORYZ_SOURCE_DIR/package.json" ]] ||

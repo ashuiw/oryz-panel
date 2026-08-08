@@ -15,6 +15,11 @@ for candidate in "/opt/oryz/app/deploy/lib" "$(dirname "$_self")/lib" "$(dirname
   if [[ -f "$candidate/common.sh" ]]; then LIB_DIR="$candidate"; break; fi
 done
 [[ -n "${LIB_DIR:-}" ]] || { echo "panelctl: cannot locate deploy/lib" >&2; exit 1; }
+# Library helpers (build.sh, database.sh) resolve bundled assets relative to the
+# deploy/ directory; the installer exports this, so define it here too.
+SCRIPT_DIR="$(dirname "$LIB_DIR")"
+
+
 
 # shellcheck source=lib/common.sh
 source "$LIB_DIR/common.sh"

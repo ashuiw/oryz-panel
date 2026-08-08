@@ -58,7 +58,7 @@ bootstrap_auth_schema() {
   # A vanilla PostgreSQL server has none of those, so create them first.
   step "Auth schema bootstrap"
   local sql="$ORYZ_APP_DIR/deploy/sql/00-bootstrap.sql"
-  [[ -f "$sql" ]] || sql="$SCRIPT_DIR/sql/00-bootstrap.sql"
+  [[ -f "$sql" ]] || sql="${SCRIPT_DIR:-}/sql/00-bootstrap.sql"
   [[ -f "$sql" ]] || die "bootstrap SQL not found (expected deploy/sql/00-bootstrap.sql)"
 
   if [[ "${DB_MODE}" == "local" ]]; then
@@ -129,7 +129,7 @@ SQL
 seed_initial_data() {
   step "Seeding reference data"
   local seed="$ORYZ_APP_DIR/deploy/sql/seed.sql"
-  [[ -f "$seed" ]] || seed="$SCRIPT_DIR/sql/seed.sql"
+  [[ -f "$seed" ]] || seed="${SCRIPT_DIR:-}/sql/seed.sql"
   if [[ -f "$seed" ]]; then
     psql_app -q --single-transaction -f "$seed"
     check_row "Seed data" "defaults loaded" ok
