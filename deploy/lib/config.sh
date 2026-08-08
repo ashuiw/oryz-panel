@@ -105,6 +105,29 @@ collect_smtp_config() {
   ask SMTP_FROM_NAME "From name" "${SMTP_FROM_NAME:-Oryz Panel}"
 }
 
+collect_auth_config() {
+  # The browser bundle talks to a hosted authentication/data backend. Its URL
+  # and publishable key are inlined at build time; when they are missing the
+  # client bundle throws during hydration and the panel renders a blank page
+  # after the server-rendered HTML flashes. Collect them up front.
+  step "Authentication backend"
+  cat <<'EOF'
+  The panel UI authenticates against a hosted backend (URL + publishable key).
+  Copy both values from your project's API settings. Leaving them blank keeps
+  the public pages working but sign-in will be unavailable.
+EOF
+  ask SUPABASE_URL "Backend API URL (https://…)" "${SUPABASE_URL:-}"
+  ask SUPABASE_PUBLISHABLE_KEY "Backend publishable/anon key" "${SUPABASE_PUBLISHABLE_KEY:-}"
+  if [[ -z "${SUPABASE_URL:-}" || -z "${SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
+    warn "authentication backend not configured — sign-in is disabled until you run:
+        panelctl config set SUPABASE_URL https://…
+        panelctl config set SUPABASE_PUBLISHABLE_KEY …
+        panelctl rebuild"
+  else
+    check_row "Backend" "${SUPABASE_URL}" ok
+  fi
+}
+
 collect_admin_config() {
   step "Administrator account"
   ask ADMIN_EMAIL "Administrator email" "${ADMIN_EMAIL:-}"

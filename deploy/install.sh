@@ -193,6 +193,7 @@ EOF
     collect_redis_config
     collect_storage_config
     collect_smtp_config
+    collect_auth_config
     collect_integration_keys
     collect_admin_config
   fi

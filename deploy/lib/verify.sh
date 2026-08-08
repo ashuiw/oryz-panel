@@ -31,6 +31,12 @@ check_config() {
     else
       _dx "Required keys" ok "all present"
     fi
+    if [[ -n "$(env_get SUPABASE_URL || true)" && -n "$(env_get SUPABASE_PUBLISHABLE_KEY || true)" ]]; then
+      _dx "Auth backend" ok "$(env_get SUPABASE_URL)"
+    else
+      _dx "Auth backend" warn "SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY unset — sign-in disabled" \
+        "panelctl config set SUPABASE_URL https://… ; panelctl config set SUPABASE_PUBLISHABLE_KEY … ; panelctl rebuild"
+    fi
   else
     _dx "Config file" fail "not found at $ORYZ_ENV_FILE" "run: panelctl install"
   fi

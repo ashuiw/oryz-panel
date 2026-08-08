@@ -55,8 +55,23 @@ build_application() {
   # must target Node. Without this the build defaults to a Cloudflare Worker
   # module, which `node .output/server/index.mjs` cannot serve (the unit starts,
   # binds nothing and restarts forever).
+  # Vite inlines VITE_* at build time. Without them the generated backend
+  # client throws on first use in the browser, hydration dies and every page
+  # renders blank after the SSR HTML flashes.
+  local sb_url sb_key
+  sb_url="$(env_get VITE_SUPABASE_URL || true)"; sb_url="${sb_url:-$(env_get SUPABASE_URL || true)}"
+  sb_key="$(env_get VITE_SUPABASE_PUBLISHABLE_KEY || true)"; sb_key="${sb_key:-$(env_get SUPABASE_PUBLISHABLE_KEY || true)}"
+  if [[ -z "$sb_url" || -z "$sb_key" ]]; then
+    warn "SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY are unset — the panel will build,
+        but sign-in stays disabled. Set them and rerun 'panelctl rebuild':
+          panelctl config set SUPABASE_URL https://…
+          panelctl config set SUPABASE_PUBLISHABLE_KEY …"
+  fi
+
   log "building the panel (Node server target)…"
-  run_as_app "NODE_ENV=production NITRO_PRESET=node-server SERVER_PRESET=node-server pnpm run build" >/dev/null
+  run_as_app "NODE_ENV=production NITRO_PRESET=node-server SERVER_PRESET=node-server \
+    VITE_SUPABASE_URL='${sb_url}' VITE_SUPABASE_PUBLISHABLE_KEY='${sb_key}' \
+    pnpm run build" >/dev/null
 
   local entry="$ORYZ_APP_DIR/.output/server/index.mjs"
   [[ -f "$entry" ]] ||
