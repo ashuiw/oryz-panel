@@ -12,6 +12,11 @@ WorkingDirectory=@@APP_DIR@@
 EnvironmentFile=@@ENV_FILE@@
 Environment=NODE_ENV=production
 Environment=ORYZ_ROLE=web
+# The Node server entry binds to HOST:PORT; nginx proxies to this loopback port.
+Environment=HOST=127.0.0.1
+Environment=PORT=@@APP_PORT@@
+Environment=NITRO_HOST=127.0.0.1
+Environment=NITRO_PORT=@@APP_PORT@@
 ExecStart=/usr/bin/node @@APP_DIR@@/.output/server/index.mjs
 Restart=always
 RestartSec=5

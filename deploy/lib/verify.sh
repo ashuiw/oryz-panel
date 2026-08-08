@@ -90,7 +90,10 @@ check_services() {
 check_http() {
   step "HTTP and WebSocket"
   local code
-  code="$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:${APP_PORT}/" 2>/dev/null || echo 000)"
+  # No -f here: curl already prints 000 on transport failure, and combining it
+  # with a fallback echo produced doubled codes like "000000" in the report.
+  code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:${APP_PORT}/" 2>/dev/null)"
+  code="${code:-000}"
   if [[ "$code" =~ ^(200|204|301|302|307|308)$ ]]; then
     _dx "Panel" ok "application returned $code"
   else
@@ -98,7 +101,8 @@ check_http() {
   fi
 
   if [[ "${SSL_MODE}" != "none" ]]; then
-    code="$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 15 "https://${APP_DOMAIN}/" 2>/dev/null || echo 000)"
+    code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "https://${APP_DOMAIN}/" 2>/dev/null)"
+    code="${code:-000}"
     if [[ "$code" =~ ^(200|301|302|307|308)$ ]]; then
       _dx "Public URL" ok "https://${APP_DOMAIN} → $code"
     else

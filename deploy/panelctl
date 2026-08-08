@@ -36,6 +36,7 @@ ${C_BOLD}panelctl${C_RESET} — ${ORYZ_NAME} administration CLI (v${PANELCTL_VER
   ${C_BOLD}Lifecycle${C_RESET}
     install [args…]        Run the installer (delegates to deploy/install.sh)
     update [--check]       Upgrade to the latest release, with automatic rollback
+    rebuild                Recompile the installed source and restart services
     uninstall [--purge]    Remove services, app and (with --purge) data
     version                Show panel and CLI versions
 
@@ -253,6 +254,21 @@ cmd_update() {
   exec bash "$updater" "$@"
 }
 
+# Recompile the installed source (Node server target) and reinstall the units.
+cmd_rebuild() {
+  require_root; need_config
+  fetch_release
+  build_application
+  install_services
+  services_restart
+  if services_wait_healthy 90; then
+    success "panel rebuilt and running on 127.0.0.1:${APP_PORT}"
+  else
+    services_status
+    die "services did not become healthy — inspect: journalctl -u oryz-web -n 80"
+  fi
+}
+
 cmd_uninstall() {
   require_root
   env_load "$ORYZ_ENV_FILE" 2>/dev/null || true
@@ -344,6 +360,7 @@ main() {
 
     install)        cmd_install "$@" ;;
     update|upgrade) cmd_update "$@" ;;
+    rebuild)        cmd_rebuild "$@" ;;
     uninstall)      cmd_uninstall "$@" ;;
     doctor)         cmd_doctor "$@" ;;
     permissions:repair) cmd_permissions_repair ;;

@@ -26,6 +26,7 @@ install_services() {
       -e "s|@@USER@@|${ORYZ_USER}|g" \
       -e "s|@@GROUP@@|${ORYZ_GROUP}|g" \
       -e "s|@@APP_DIR@@|${ORYZ_APP_DIR}|g" \
+      -e "s|@@APP_PORT@@|${APP_PORT:-3000}|g" \
       -e "s|@@ENV_FILE@@|${ORYZ_ENV_FILE}|g" \
       -e "s|@@STATE_DIR@@|${ORYZ_STATE_DIR}|g" \
       -e "s|@@LOG_DIR@@|${ORYZ_LOG_DIR}|g" \

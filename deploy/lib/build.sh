@@ -51,11 +51,18 @@ build_application() {
   run_as_app "pnpm install --frozen-lockfile --prod=false" >/dev/null 2>&1 ||
     run_as_app "pnpm install --prod=false" >/dev/null
 
-  log "building the panel…"
-  run_as_app "NODE_ENV=production pnpm run build" >/dev/null
+  # Self-hosted installs run on plain Node behind systemd, so the server bundle
+  # must target Node. Without this the build defaults to a Cloudflare Worker
+  # module, which `node .output/server/index.mjs` cannot serve (the unit starts,
+  # binds nothing and restarts forever).
+  log "building the panel (Node server target)…"
+  run_as_app "NODE_ENV=production NITRO_PRESET=node-server SERVER_PRESET=node-server pnpm run build" >/dev/null
 
-  [[ -d "$ORYZ_APP_DIR/.output" || -d "$ORYZ_APP_DIR/dist" ]] ||
-    die "build finished but produced no output directory"
+  local entry="$ORYZ_APP_DIR/.output/server/index.mjs"
+  [[ -f "$entry" ]] ||
+    die "build finished but produced no Node server entry at ${entry}"
+  grep -qE 'node:http|createServer|\.listen\(' "$entry" 2>/dev/null ||
+    warn "the server bundle does not look like a Node server — if oryz-web fails to bind, rebuild with NITRO_PRESET=node-server"
 
   log "pruning development dependencies…"
   run_as_app "pnpm prune --prod" >/dev/null 2>&1 || true
