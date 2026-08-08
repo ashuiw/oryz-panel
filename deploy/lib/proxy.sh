@@ -1,10 +1,34 @@
 #!/usr/bin/env bash
 # Reverse proxy configuration rendering (nginx, Caddy, Traefik).
 
+nginx_version() {
+  has_cmd nginx || { echo "0.0.0"; return 0; }
+  nginx -v 2>&1 | sed -n 's|.*nginx/\([0-9.]*\).*|\1|p' | awk 'NR==1'
+}
+
+nginx_supports_http2_directive() {
+  # `http2 on;` exists only from nginx 1.25.1; older builds need `listen ... http2`.
+  local v major minor patch
+  v="$(nginx_version)"; v="${v:-0.0.0}"
+  IFS=. read -r major minor patch <<<"$v"
+  major="${major:-0}"; minor="${minor:-0}"; patch="${patch:-0}"
+  (( major > 1 )) && return 0
+  (( major < 1 )) && return 1
+  (( minor > 25 )) && return 0
+  (( minor < 25 )) && return 1
+  (( patch >= 1 ))
+}
+
 render_template() {
   # render_template src dest — substitutes @@VAR@@ placeholders.
   local src="$1" dest="$2"
   [[ -f "$src" ]] || die "missing template: $src"
+  local http2_listen="" http2_directive=""
+  if nginx_supports_http2_directive; then
+    http2_directive="    http2 on;"
+  else
+    http2_listen=" http2"
+  fi
   sed \
     -e "s|@@DOMAIN@@|${PANEL_DOMAIN}|g" \
     -e "s|@@APP_PORT@@|${APP_PORT}|g" \
@@ -13,9 +37,12 @@ render_template() {
     -e "s|@@SSL_CERT@@|${SSL_CERT_PATH}|g" \
     -e "s|@@SSL_KEY@@|${SSL_KEY_PATH}|g" \
     -e "s|@@SSL_EMAIL@@|${SSL_EMAIL:-admin@${PANEL_DOMAIN}}|g" \
+    -e "s|@@HTTP2_LISTEN@@|${http2_listen}|g" \
+    -e "s|@@HTTP2_DIRECTIVE@@|${http2_directive}|g" \
     "$src" >"$dest"
   chmod 0644 "$dest"
 }
+
 
 configure_nginx() {
   local tpl_dir="$1"
