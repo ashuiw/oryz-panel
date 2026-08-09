@@ -7,12 +7,15 @@ import {
   Gauge,
   KeyRound,
   LayoutGrid,
+  MapPin,
   Network,
   Server,
   Settings,
   ShieldCheck,
   Users,
+  Webhook,
 } from "lucide-react";
+
 
 import { cn } from "@/lib/utils";
 import { useAccess } from "@/hooks/use-access";
@@ -62,9 +65,10 @@ const NAV_GROUPS: NavGroup[] = [
         permission: PERMISSIONS.serverCreate,
       },
       { label: "Nodes", to: "/admin/nodes", icon: Network, permission: PERMISSIONS.nodeView },
-
+      { label: "Locations", to: "/admin/locations", icon: MapPin, permission: PERMISSIONS.locationManage },
       { label: "Nests & eggs", to: "/admin/nests", icon: Boxes, permission: PERMISSIONS.eggManage },
       { label: "Users", to: "/admin/users", icon: Users, permission: PERMISSIONS.userView },
+      { label: "Webhooks", to: "/admin/webhooks", icon: Webhook, permission: PERMISSIONS.webhookManage },
       {
         label: "Audit log",
         to: "/admin/audit",
@@ -77,6 +81,7 @@ const NAV_GROUPS: NavGroup[] = [
         icon: Settings,
         permission: PERMISSIONS.settingsManage,
       },
+
     ],
   },
 ];

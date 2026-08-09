@@ -22,11 +22,13 @@ import { Route as AuthenticatedAccountApiRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAccountSecurityRouteImport } from './routes/_authenticated/account/security'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
 import { Route as AuthenticatedAdminAuditRouteImport } from './routes/_authenticated/admin/audit'
+import { Route as AuthenticatedAdminLocationsRouteImport } from './routes/_authenticated/admin/locations'
 import { Route as AuthenticatedAdminNestsRouteImport } from './routes/_authenticated/admin/nests'
 import { Route as AuthenticatedAdminNodesRouteImport } from './routes/_authenticated/admin/nodes'
 import { Route as AuthenticatedAdminServersRouteImport } from './routes/_authenticated/admin/servers'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin/settings'
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin/users'
+import { Route as AuthenticatedAdminWebhooksRouteImport } from './routes/_authenticated/admin/webhooks'
 import { Route as AuthenticatedServersIndexRouteImport } from './routes/_authenticated/servers/index'
 import { Route as AuthenticatedServersServerIdRouteImport } from './routes/_authenticated/servers/$serverId'
 import { Route as AuthenticatedServersServerIdIndexRouteImport } from './routes/_authenticated/servers/$serverId/index'
@@ -104,6 +106,12 @@ const AuthenticatedAdminAuditRoute = AuthenticatedAdminAuditRouteImport.update({
   path: '/audit',
   getParentRoute: () => AuthenticatedAdminRouteRoute,
 } as any)
+const AuthenticatedAdminLocationsRoute =
+  AuthenticatedAdminLocationsRouteImport.update({
+    id: '/locations',
+    path: '/locations',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedAdminNestsRoute = AuthenticatedAdminNestsRouteImport.update({
   id: '/nests',
   path: '/nests',
@@ -131,6 +139,12 @@ const AuthenticatedAdminUsersRoute = AuthenticatedAdminUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AuthenticatedAdminRouteRoute,
 } as any)
+const AuthenticatedAdminWebhooksRoute =
+  AuthenticatedAdminWebhooksRouteImport.update({
+    id: '/webhooks',
+    path: '/webhooks',
+    getParentRoute: () => AuthenticatedAdminRouteRoute,
+  } as any)
 const AuthenticatedServersIndexRoute =
   AuthenticatedServersIndexRouteImport.update({
     id: '/servers/',
@@ -197,11 +211,13 @@ export interface FileRoutesByFullPath {
   '/account/api': typeof AuthenticatedAccountApiRoute
   '/account/security': typeof AuthenticatedAccountSecurityRoute
   '/admin/audit': typeof AuthenticatedAdminAuditRoute
+  '/admin/locations': typeof AuthenticatedAdminLocationsRoute
   '/admin/nests': typeof AuthenticatedAdminNestsRoute
   '/admin/nodes': typeof AuthenticatedAdminNodesRoute
   '/admin/servers': typeof AuthenticatedAdminServersRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
+  '/admin/webhooks': typeof AuthenticatedAdminWebhooksRoute
   '/servers/$serverId': typeof AuthenticatedServersServerIdRouteWithChildren
   '/account/': typeof AuthenticatedAccountIndexRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
@@ -224,11 +240,13 @@ export interface FileRoutesByTo {
   '/account/api': typeof AuthenticatedAccountApiRoute
   '/account/security': typeof AuthenticatedAccountSecurityRoute
   '/admin/audit': typeof AuthenticatedAdminAuditRoute
+  '/admin/locations': typeof AuthenticatedAdminLocationsRoute
   '/admin/nests': typeof AuthenticatedAdminNestsRoute
   '/admin/nodes': typeof AuthenticatedAdminNodesRoute
   '/admin/servers': typeof AuthenticatedAdminServersRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
+  '/admin/webhooks': typeof AuthenticatedAdminWebhooksRoute
   '/account': typeof AuthenticatedAccountIndexRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/servers': typeof AuthenticatedServersIndexRoute
@@ -253,11 +271,13 @@ export interface FileRoutesById {
   '/_authenticated/account/api': typeof AuthenticatedAccountApiRoute
   '/_authenticated/account/security': typeof AuthenticatedAccountSecurityRoute
   '/_authenticated/admin/audit': typeof AuthenticatedAdminAuditRoute
+  '/_authenticated/admin/locations': typeof AuthenticatedAdminLocationsRoute
   '/_authenticated/admin/nests': typeof AuthenticatedAdminNestsRoute
   '/_authenticated/admin/nodes': typeof AuthenticatedAdminNodesRoute
   '/_authenticated/admin/servers': typeof AuthenticatedAdminServersRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
+  '/_authenticated/admin/webhooks': typeof AuthenticatedAdminWebhooksRoute
   '/_authenticated/servers/$serverId': typeof AuthenticatedServersServerIdRouteWithChildren
   '/_authenticated/account/': typeof AuthenticatedAccountIndexRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
@@ -283,11 +303,13 @@ export interface FileRouteTypes {
     | '/account/api'
     | '/account/security'
     | '/admin/audit'
+    | '/admin/locations'
     | '/admin/nests'
     | '/admin/nodes'
     | '/admin/servers'
     | '/admin/settings'
     | '/admin/users'
+    | '/admin/webhooks'
     | '/servers/$serverId'
     | '/account/'
     | '/admin/'
@@ -310,11 +332,13 @@ export interface FileRouteTypes {
     | '/account/api'
     | '/account/security'
     | '/admin/audit'
+    | '/admin/locations'
     | '/admin/nests'
     | '/admin/nodes'
     | '/admin/servers'
     | '/admin/settings'
     | '/admin/users'
+    | '/admin/webhooks'
     | '/account'
     | '/admin'
     | '/servers'
@@ -338,11 +362,13 @@ export interface FileRouteTypes {
     | '/_authenticated/account/api'
     | '/_authenticated/account/security'
     | '/_authenticated/admin/audit'
+    | '/_authenticated/admin/locations'
     | '/_authenticated/admin/nests'
     | '/_authenticated/admin/nodes'
     | '/_authenticated/admin/servers'
     | '/_authenticated/admin/settings'
     | '/_authenticated/admin/users'
+    | '/_authenticated/admin/webhooks'
     | '/_authenticated/servers/$serverId'
     | '/_authenticated/account/'
     | '/_authenticated/admin/'
@@ -457,6 +483,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAuditRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
+    '/_authenticated/admin/locations': {
+      id: '/_authenticated/admin/locations'
+      path: '/locations'
+      fullPath: '/admin/locations'
+      preLoaderRoute: typeof AuthenticatedAdminLocationsRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
     '/_authenticated/admin/nests': {
       id: '/_authenticated/admin/nests'
       path: '/nests'
@@ -490,6 +523,13 @@ declare module '@tanstack/react-router' {
       path: '/users'
       fullPath: '/admin/users'
       preLoaderRoute: typeof AuthenticatedAdminUsersRouteImport
+      parentRoute: typeof AuthenticatedAdminRouteRoute
+    }
+    '/_authenticated/admin/webhooks': {
+      id: '/_authenticated/admin/webhooks'
+      path: '/webhooks'
+      fullPath: '/admin/webhooks'
+      preLoaderRoute: typeof AuthenticatedAdminWebhooksRouteImport
       parentRoute: typeof AuthenticatedAdminRouteRoute
     }
     '/_authenticated/servers/': {
@@ -560,22 +600,26 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedAdminRouteRouteChildren {
   AuthenticatedAdminAuditRoute: typeof AuthenticatedAdminAuditRoute
+  AuthenticatedAdminLocationsRoute: typeof AuthenticatedAdminLocationsRoute
   AuthenticatedAdminNestsRoute: typeof AuthenticatedAdminNestsRoute
   AuthenticatedAdminNodesRoute: typeof AuthenticatedAdminNodesRoute
   AuthenticatedAdminServersRoute: typeof AuthenticatedAdminServersRoute
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
   AuthenticatedAdminUsersRoute: typeof AuthenticatedAdminUsersRoute
+  AuthenticatedAdminWebhooksRoute: typeof AuthenticatedAdminWebhooksRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
 }
 
 const AuthenticatedAdminRouteRouteChildren: AuthenticatedAdminRouteRouteChildren =
   {
     AuthenticatedAdminAuditRoute: AuthenticatedAdminAuditRoute,
+    AuthenticatedAdminLocationsRoute: AuthenticatedAdminLocationsRoute,
     AuthenticatedAdminNestsRoute: AuthenticatedAdminNestsRoute,
     AuthenticatedAdminNodesRoute: AuthenticatedAdminNodesRoute,
     AuthenticatedAdminServersRoute: AuthenticatedAdminServersRoute,
     AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
     AuthenticatedAdminUsersRoute: AuthenticatedAdminUsersRoute,
+    AuthenticatedAdminWebhooksRoute: AuthenticatedAdminWebhooksRoute,
     AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
   }
 

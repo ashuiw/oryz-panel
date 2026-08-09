@@ -63,6 +63,11 @@ function NestsPage() {
     stop: "stop",
   });
 
+  const [editEggId, setEditEggId] = useState<string | null>(null);
+  const [varName, setVarName] = useState("");
+  const [varEnv, setVarEnv] = useState("");
+  const [varDefault, setVarDefault] = useState("");
+
   const query = useQuery({
     queryKey: queryKeys.nests,
     queryFn: async () => {
@@ -70,9 +75,12 @@ function NestsPage() {
         supabase.from("nests").select("id, name, description, author").order("name"),
         supabase
           .from("eggs")
-          .select("id, nest_id, name, description, slug, docker_images, startup")
+          .select("id, nest_id, name, description, slug, docker_images, startup, stop_command")
           .order("name"),
-        supabase.from("egg_variables").select("id, egg_id, name, env_variable, default_value"),
+        supabase
+          .from("egg_variables")
+          .select("id, egg_id, name, env_variable, default_value, user_editable")
+          .order("sort_order"),
       ]);
       if (nests.error) throw nests.error;
       if (eggs.error) throw eggs.error;
@@ -133,6 +141,59 @@ function NestsPage() {
       toast.success("Egg removed");
       void queryClient.invalidateQueries({ queryKey: queryKeys.nests });
     },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const editingEgg = query.data?.eggs.find((item) => item.id === editEggId) ?? null;
+
+  const updateEgg = useMutation({
+    mutationFn: async (input: {
+      id: string;
+      patch: { name?: string; description?: string | null; startup?: string; stop_command?: string; docker_images?: unknown };
+    }) => {
+      const { error } = await supabase
+        .from("eggs")
+        .update(input.patch as never)
+        .eq("id", input.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Egg updated");
+      void queryClient.invalidateQueries({ queryKey: queryKeys.nests });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const addVariable = useMutation({
+    mutationFn: async (eggId: string) => {
+      const { error } = await supabase.from("egg_variables").insert({
+        egg_id: eggId,
+        name: varName.trim(),
+        env_variable: varEnv.trim().toUpperCase().replace(/[^A-Z0-9_]/g, "_"),
+        default_value: varDefault,
+        user_viewable: true,
+        user_editable: true,
+        rules: "required|string",
+        sort_order: 0,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setVarName("");
+      setVarEnv("");
+      setVarDefault("");
+      toast.success("Variable added");
+      void queryClient.invalidateQueries({ queryKey: queryKeys.nests });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const removeVariable = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("egg_variables").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.nests }),
     onError: (error: Error) => toast.error(error.message),
   });
 
@@ -297,6 +358,9 @@ function NestsPage() {
                         <Badge variant="secondary" className="font-mono text-[11px]">
                           {item.slug}
                         </Badge>
+                        <Button size="sm" variant="outline" onClick={() => setEditEggId(item.id)}>
+                          Edit
+                        </Button>
                         <Button
                           size="icon"
                           variant="ghost"
@@ -325,6 +389,124 @@ function NestsPage() {
           );
         })}
       </div>
+
+      <Dialog open={Boolean(editingEgg)} onOpenChange={(value) => !value && setEditEggId(null)}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit {editingEgg?.name}</DialogTitle>
+            <DialogDescription>
+              Startup command, container image and the variables players can change per server.
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingEgg && (
+            <div className="space-y-5">
+              <div className="grid gap-2">
+                <Label htmlFor="ee-name">Name</Label>
+                <Input
+                  id="ee-name"
+                  defaultValue={editingEgg.name}
+                  onBlur={(e) =>
+                    e.target.value.trim() !== editingEgg.name &&
+                    updateEgg.mutate({ id: editingEgg.id, patch: { name: e.target.value.trim() } })
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ee-image">Docker image</Label>
+                <Input
+                  id="ee-image"
+                  defaultValue={Object.values((editingEgg.docker_images ?? {}) as Record<string, string>)[0] ?? ""}
+                  onBlur={(e) =>
+                    updateEgg.mutate({
+                      id: editingEgg.id,
+                      patch: { docker_images: { Default: e.target.value.trim() } },
+                    })
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ee-startup">Startup command</Label>
+                <Textarea
+                  id="ee-startup"
+                  rows={3}
+                  className="font-mono text-xs"
+                  defaultValue={editingEgg.startup}
+                  onBlur={(e) =>
+                    e.target.value !== editingEgg.startup &&
+                    updateEgg.mutate({ id: editingEgg.id, patch: { startup: e.target.value } })
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ee-stop">Stop command</Label>
+                <Input
+                  id="ee-stop"
+                  defaultValue={editingEgg.stop_command}
+                  onBlur={(e) =>
+                    e.target.value !== editingEgg.stop_command &&
+                    updateEgg.mutate({ id: editingEgg.id, patch: { stop_command: e.target.value } })
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Variables</p>
+                {query.data?.variables
+                  .filter((variable) => variable.egg_id === editingEgg.id)
+                  .map((variable) => (
+                    <div key={variable.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2">
+                      <span className="min-w-0 flex-1 truncate text-xs">
+                        <span className="font-medium">{variable.name}</span>{" "}
+                        <code className="font-mono text-[11px] text-muted-foreground">
+                          {variable.env_variable}={variable.default_value}
+                        </code>
+                      </span>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-7"
+                        onClick={() => removeVariable.mutate(variable.id)}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                <div className="flex flex-wrap gap-2">
+                  <Input
+                    value={varName}
+                    className="h-8 w-40"
+                    placeholder="Label"
+                    aria-label="Variable label"
+                    onChange={(e) => setVarName(e.target.value)}
+                  />
+                  <Input
+                    value={varEnv}
+                    className="h-8 w-40 font-mono"
+                    placeholder="SERVER_JARFILE"
+                    aria-label="Environment variable"
+                    onChange={(e) => setVarEnv(e.target.value)}
+                  />
+                  <Input
+                    value={varDefault}
+                    className="h-8 w-40"
+                    placeholder="Default value"
+                    aria-label="Default value"
+                    onChange={(e) => setVarDefault(e.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    disabled={!varName.trim() || !varEnv.trim() || addVariable.isPending}
+                    onClick={() => addVariable.mutate(editingEgg.id)}
+                  >
+                    Add
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Boxes, FileClock, Network, Settings, Users } from "lucide-react";
+import { Boxes, FileClock, MapPin, Network, Server, Settings, Users, Webhook } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,9 +17,12 @@ export const Route = createFileRoute("/_authenticated/admin/")({
 });
 
 const SECTIONS = [
+  { to: "/admin/servers", label: "Servers", description: "Create and place servers", icon: Server },
   { to: "/admin/nodes", label: "Nodes", description: "Daemon hosts and capacity", icon: Network },
+  { to: "/admin/locations", label: "Locations", description: "Regions that group nodes", icon: MapPin },
   { to: "/admin/nests", label: "Nests & eggs", description: "Game templates and variables", icon: Boxes },
   { to: "/admin/users", label: "Users", description: "Accounts and role assignment", icon: Users },
+  { to: "/admin/webhooks", label: "Webhooks", description: "Outbound event delivery", icon: Webhook },
   { to: "/admin/audit", label: "Audit log", description: "Append-only activity record", icon: FileClock },
   { to: "/admin/settings", label: "Settings", description: "Panel-wide configuration", icon: Settings },
 ];

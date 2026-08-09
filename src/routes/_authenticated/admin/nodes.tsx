@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Copy, Server as ServerIcon, Trash2 } from "lucide-react";
+import { Copy, Pencil, Server as ServerIcon, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/layout/app-shell";
@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
+import { recordAudit } from "@/lib/audit";
 import { buildNodeConfig, nodeBootstrapCommand } from "@/lib/node-config";
 import { formatMegabytes, formatRelative } from "@/lib/format";
 import { queryKeys } from "@/lib/query-keys";
@@ -58,6 +59,21 @@ interface NodeForm {
   ip: string;
 }
 
+interface NodePatch {
+  name?: string;
+  description?: string | null;
+  fqdn?: string;
+  scheme?: string;
+  daemon_port?: number;
+  daemon_sftp_port?: number;
+  memory_mb?: number;
+  disk_mb?: number;
+  cpu_cores?: number;
+  location_id?: string | null;
+  public_node?: boolean;
+  maintenance_mode?: boolean;
+}
+
 const EMPTY: NodeForm = {
   name: "",
   description: "",
@@ -79,6 +95,9 @@ function NodesPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<NodeForm>(EMPTY);
   const [configFor, setConfigFor] = useState<string | null>(null);
+  const [manageFor, setManageFor] = useState<string | null>(null);
+  const [portRange, setPortRange] = useState("");
+  const [portIp, setPortIp] = useState("0.0.0.0");
 
   const set = <K extends keyof NodeForm>(key: K, value: NodeForm[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -162,6 +181,70 @@ function NodesPage() {
     },
     onError: (error: Error) => toast.error(error.message),
   });
+
+  /* ---- editing an existing node ------------------------------------ */
+
+  const editing = nodes.data?.find((node) => node.id === manageFor) ?? null;
+
+  const update = useMutation({
+    mutationFn: async (values: { id: string; patch: NodePatch }) => {
+      const { error } = await supabase.from("nodes").update(values.patch).eq("id", values.id);
+      if (error) throw error;
+      await recordAudit({ action: "node.update", resourceType: "node", resourceId: values.id });
+    },
+    onSuccess: () => {
+      toast.success("Node updated");
+      void queryClient.invalidateQueries({ queryKey: queryKeys.nodes.all });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const nodeAllocations = useQuery({
+    enabled: Boolean(manageFor),
+    queryKey: [...queryKeys.allocations, manageFor],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("allocations")
+        .select("id, ip, port, server_id")
+        .eq("node_id", manageFor!)
+        .order("port");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const addPorts = useMutation({
+    mutationFn: async (input: { nodeId: string; ip: string; range: string }) => {
+      const parts = input.range.split("-").map((part) => Number(part.trim()));
+      const from = parts[0] ?? NaN;
+      const to = parts[1] ?? from;
+      if (!Number.isFinite(from) || !Number.isFinite(to) || to < from || to - from > 500) {
+        throw new Error("Enter a port or range like 25565-25585 (max 500 ports)");
+      }
+      const rows = [];
+      for (let port = from; port <= to; port += 1) {
+        rows.push({ node_id: input.nodeId, ip: input.ip.trim() || "0.0.0.0", port, is_primary: false });
+      }
+      const { error } = await supabase.from("allocations").insert(rows);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Ports added");
+      void queryClient.invalidateQueries({ queryKey: queryKeys.allocations });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const removeAllocation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("allocations").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.allocations }),
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+
 
   const selected = nodes.data?.find((node) => node.id === configFor) ?? null;
   const valid = form.name.trim().length > 1 && form.fqdn.trim().length > 3;
@@ -356,6 +439,9 @@ function NodesPage() {
                 <Button size="sm" variant="outline" onClick={() => setConfigFor(node.id)}>
                   Configuration
                 </Button>
+                <Button size="sm" variant="ghost" onClick={() => setManageFor(node.id)}>
+                  <Pencil className="size-3.5" /> Manage
+                </Button>
                 <Button
                   size="icon"
                   variant="ghost"
@@ -397,7 +483,140 @@ function NodesPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={Boolean(editing)} onOpenChange={(value) => !value && setManageFor(null)}>
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Manage {editing?.name}</DialogTitle>
+            <DialogDescription>
+              Change how the panel reaches this node and which ports it can hand out to servers.
+            </DialogDescription>
+          </DialogHeader>
+
+          {editing && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Name" id="e-name">
+                  <Input
+                    id="e-name"
+                    defaultValue={editing.name}
+                    onBlur={(e) =>
+                      e.target.value.trim() !== editing.name &&
+                      update.mutate({ id: editing.id, patch: { name: e.target.value.trim() } })
+                    }
+                  />
+                </Field>
+                <Field label="FQDN" id="e-fqdn">
+                  <Input
+                    id="e-fqdn"
+                    defaultValue={editing.fqdn}
+                    onBlur={(e) =>
+                      e.target.value.trim() !== editing.fqdn &&
+                      update.mutate({ id: editing.id, patch: { fqdn: e.target.value.trim() } })
+                    }
+                  />
+                </Field>
+                <Field label="Memory (MB)" id="e-mem">
+                  <Input
+                    id="e-mem"
+                    defaultValue={String(editing.memory_mb)}
+                    onBlur={(e) =>
+                      update.mutate({ id: editing.id, patch: { memory_mb: Number(e.target.value) || 0 } })
+                    }
+                  />
+                </Field>
+                <Field label="Disk (MB)" id="e-disk">
+                  <Input
+                    id="e-disk"
+                    defaultValue={String(editing.disk_mb)}
+                    onBlur={(e) =>
+                      update.mutate({ id: editing.id, patch: { disk_mb: Number(e.target.value) || 0 } })
+                    }
+                  />
+                </Field>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Label htmlFor="e-maint">Maintenance mode</Label>
+                <Switch
+                  id="e-maint"
+                  checked={editing.maintenance_mode}
+                  onCheckedChange={(value) =>
+                    update.mutate({ id: editing.id, patch: { maintenance_mode: value } })
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="e-public">Available for public deployments</Label>
+                <Switch
+                  id="e-public"
+                  checked={editing.public_node}
+                  onCheckedChange={(value) => update.mutate({ id: editing.id, patch: { public_node: value } })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Port allocations</p>
+                <div className="flex flex-wrap gap-2">
+                  <Input
+                    value={portIp}
+                    className="h-8 w-36"
+                    aria-label="Allocation IP"
+                    onChange={(e) => setPortIp(e.target.value)}
+                  />
+                  <Input
+                    value={portRange}
+                    className="h-8 w-40"
+                    placeholder="25565-25585"
+                    aria-label="Port range"
+                    onChange={(e) => setPortRange(e.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    disabled={addPorts.isPending || portRange.trim() === ""}
+                    onClick={() =>
+                      addPorts.mutate(
+                        { nodeId: editing.id, ip: portIp, range: portRange },
+                        { onSuccess: () => setPortRange("") },
+                      )
+                    }
+                  >
+                    Add ports
+                  </Button>
+                </div>
+                <div className="max-h-52 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
+                  {(nodeAllocations.data?.length ?? 0) === 0 && (
+                    <p className="p-2 text-xs text-muted-foreground">No ports on this node yet.</p>
+                  )}
+                  {nodeAllocations.data?.map((allocation) => (
+                    <div key={allocation.id} className="flex items-center gap-2 px-2 py-1">
+                      <span className="flex-1 font-mono text-xs">
+                        {allocation.ip}:{allocation.port}
+                      </span>
+                      {allocation.server_id ? (
+                        <Badge variant="secondary" className="text-[11px]">
+                          in use
+                        </Badge>
+                      ) : (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-7"
+                          onClick={() => removeAllocation.mutate(allocation.id)}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
+
   );
 }
 

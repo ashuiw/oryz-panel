@@ -16,6 +16,10 @@ export type AuditAction =
   | `profile.${string}`
   | `server.${string}`
   | `node.${string}`
+  | `location.${string}`
+  | `nest.${string}`
+  | `egg.${string}`
+  | `allocation.${string}`
   | `user.${string}`
   | `role.${string}`
   | `backup.${string}`
@@ -23,6 +27,7 @@ export type AuditAction =
   | `apikey.${string}`
   | `settings.${string}`
   | `webhook.${string}`;
+
 
 export interface AuditEntry {
   action: AuditAction;
