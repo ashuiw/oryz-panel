@@ -25,6 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
+import { getDaemonClient } from "@/daemon";
 import { recordAudit } from "@/lib/audit";
 import { formatMegabytes } from "@/lib/format";
 import { queryKeys } from "@/lib/query-keys";
@@ -96,6 +97,7 @@ function identifierFor(name: string) {
 
 function AdminServersPage() {
   const queryClient = useQueryClient();
+  const daemon = getDaemonClient();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [variables, setVariables] = useState<Record<string, string>>({});
@@ -199,7 +201,7 @@ function AdminServersPage() {
           backup_limit: Number(values.backupLimit),
           status: "installing" as const,
         })
-        .select("id")
+        .select("id, identifier")
         .single();
       if (error) throw error;
 
@@ -211,16 +213,26 @@ function AdminServersPage() {
       if (rows.length > 0) await supabase.from("server_variables").insert(rows);
 
       if (values.allocationId) {
-        await supabase
+        const allocation = await supabase
           .from("allocations")
           .update({ server_id: data.id, is_primary: true })
           .eq("id", values.allocationId);
+        if (allocation.error) throw allocation.error;
       }
 
       await recordAudit({ action: "server.create", resourceType: "server", resourceId: data.id });
+      try {
+        await daemon.install(data.identifier);
+        const status = values.startOnCompletion ? "running" : "offline";
+        if (!values.startOnCompletion) await daemon.sendPower(data.identifier, "stop");
+        await supabase.from("servers").update({ status, installed_at: new Date().toISOString() }).eq("id", data.id);
+      } catch (installationError) {
+        await supabase.from("servers").update({ status: "install_failed" }).eq("id", data.id);
+        throw installationError;
+      }
     },
     onSuccess: () => {
-      toast.success("Server queued for installation on its node");
+      toast.success("Server installed on its node");
       setForm(EMPTY_FORM);
       setOpen(false);
       void queryClient.invalidateQueries({ queryKey: queryKeys.servers.all });
@@ -229,7 +241,8 @@ function AdminServersPage() {
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async ({ id, identifier }: { id: string; identifier: string }) => {
+      await daemon.deleteServer(identifier);
       const { error } = await supabase.from("servers").delete().eq("id", id);
       if (error) throw error;
     },
@@ -527,7 +540,7 @@ function AdminServersPage() {
                 className="size-8"
                 onClick={() => {
                   if (window.confirm(`Delete ${server.name}? Its data is removed from the node.`)) {
-                    remove.mutate(server.id);
+                     remove.mutate({ id: server.id, identifier: server.identifier });
                   }
                 }}
               >

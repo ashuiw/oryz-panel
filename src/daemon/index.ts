@@ -1,4 +1,4 @@
-import { createMockDaemonClient } from "./mock-adapter";
+import { ServerDaemonClient } from "./server-adapter";
 import type { DaemonClient } from "./types";
 
 export * from "./types";
@@ -9,12 +9,12 @@ let client: DaemonClient | null = null;
 /**
  * Single entry point for every server operation in the panel.
  *
- * Swap in the real fleet by replacing the factory below with
- * `new HttpDaemonClient({ baseUrl, getToken })` — no component, hook or
- * database change is required, because both adapters satisfy `DaemonClient`.
+ * Browser calls are relayed through an authenticated server function. That
+ * relay resolves the server's node and adds its secret credential server-side,
+ * so node tokens are never exposed to users.
  */
 export function getDaemonClient(): DaemonClient {
-  if (!client) client = createMockDaemonClient();
+  if (!client) client = new ServerDaemonClient();
   return client;
 }
 

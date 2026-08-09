@@ -388,6 +388,10 @@ class MockDaemonClient implements DaemonClient {
   async reinstall(serverId: string): Promise<void> {
     return this.install(serverId);
   }
+
+  async deleteServer(serverId: string): Promise<void> {
+    this.servers.delete(serverId);
+  }
 }
 
 export function createMockDaemonClient(): DaemonClient {

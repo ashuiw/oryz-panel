@@ -210,4 +210,8 @@ export class HttpDaemonClient implements DaemonClient {
   reinstall(serverId: string): Promise<void> {
     return this.request(`/api/servers/${serverId}/reinstall`, { method: "POST", serverId });
   }
+
+  deleteServer(serverId: string): Promise<void> {
+    return this.request(`/api/servers/${serverId}`, { method: "DELETE", serverId });
+  }
 }

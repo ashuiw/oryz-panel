@@ -147,4 +147,5 @@ export interface DaemonClient {
   // Lifecycle
   install(serverId: string): Promise<void>;
   reinstall(serverId: string): Promise<void>;
+  deleteServer(serverId: string): Promise<void>;
 }

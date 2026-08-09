@@ -95,6 +95,10 @@ install_wings() {
   chown -R "$WINGS_USER:$WINGS_GROUP" "$WINGS_DATA_DIR" /var/log/oryz-wings
 
   write_wings_config
+  local daemon_source="${ORYZ_TEMPLATE_DIR:-$ORYZ_APP_DIR/deploy/templates}/../wings/oryz-wings.mjs"
+  [[ -f "$daemon_source" ]] || daemon_source="${SCRIPT_DIR}/wings/oryz-wings.mjs"
+  [[ -f "$daemon_source" ]] || die "missing wings daemon: $daemon_source"
+  install -m 0755 "$daemon_source" /usr/local/bin/oryz-wings
   install_wings_service
 
   check_row "Wings" "node ${WINGS_NODE_NAME} configured at ${WINGS_CONF_FILE}" ok

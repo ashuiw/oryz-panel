@@ -34,6 +34,10 @@ function ServerSettingsPage() {
   const [startup, setStartup] = useState("");
   const [image, setImage] = useState("");
   const [variables, setVariables] = useState<Record<string, string>>({});
+  const [memoryMb, setMemoryMb] = useState("");
+  const [diskMb, setDiskMb] = useState("");
+  const [cpuPercent, setCpuPercent] = useState("");
+  const [swapMb, setSwapMb] = useState("");
 
   const record = server.data;
 
@@ -77,6 +81,10 @@ function ServerSettingsPage() {
     setDescription(record.description ?? "");
     setStartup(record.startup_command ?? "");
     setImage(record.docker_image ?? "");
+    setMemoryMb(String(record.memory_mb));
+    setDiskMb(String(record.disk_mb));
+    setCpuPercent(String(record.cpu_percent));
+    setSwapMb(String(record.swap_mb));
   }, [record]);
 
   useEffect(() => {
@@ -98,6 +106,10 @@ function ServerSettingsPage() {
           description: description.trim() || null,
           startup_command: startup.trim() || null,
           docker_image: image || null,
+          memory_mb: Number(memoryMb),
+          disk_mb: Number(diskMb),
+          cpu_percent: Number(cpuPercent),
+          swap_mb: Number(swapMb),
         })
         .eq("id", record!.id);
       if (error) throw error;
@@ -141,6 +153,7 @@ function ServerSettingsPage() {
 
   const destroy = useMutation({
     mutationFn: async () => {
+      await daemon.deleteServer(serverId);
       const { error } = await supabase.from("servers").delete().eq("id", record!.id);
       if (error) throw error;
     },
@@ -183,6 +196,21 @@ function ServerSettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {access.isStaff && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Resource limits</CardTitle>
+            <CardDescription>Container limits applied by the node on the next reinstall.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            <ResourceField id="s-memory" label="Memory (MB)" value={memoryMb} setValue={setMemoryMb} />
+            <ResourceField id="s-swap" label="Swap (MB)" value={swapMb} setValue={setSwapMb} />
+            <ResourceField id="s-disk" label="Disk (MB)" value={diskMb} setValue={setDiskMb} />
+            <ResourceField id="s-cpu" label="CPU (%)" value={cpuPercent} setValue={setCpuPercent} />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -270,6 +298,15 @@ function ServerSettingsPage() {
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function ResourceField({ id, label, value, setValue }: { id: string; label: string; value: string; setValue: (value: string) => void }) {
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Input id={id} inputMode="numeric" value={value} onChange={(event) => setValue(event.target.value.replace(/\D/g, ""))} />
     </div>
   );
 }

@@ -55,7 +55,7 @@ function NetworkPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Port assigned to this server");
+      toast.success("Port assigned; reinstall the server to apply its container binding");
       void queryClient.invalidateQueries({ queryKey: queryKeys.servers.allocations(serverId) });
     },
     onError: (error: Error) => toast.error(error.message),
@@ -70,7 +70,7 @@ function NetworkPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Port released");
+      toast.success("Port released; reinstall the server to remove its container binding");
       void queryClient.invalidateQueries({ queryKey: queryKeys.servers.allocations(serverId) });
     },
     onError: (error: Error) => toast.error(error.message),

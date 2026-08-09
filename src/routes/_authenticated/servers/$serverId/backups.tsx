@@ -47,12 +47,15 @@ function BackupsPage() {
       const label = name.trim() || `backup-${new Date().toISOString().slice(0, 16)}`;
       const descriptor = await daemon.createBackup(serverId, label);
       const { error } = await supabase.from("backups").insert({
+        id: descriptor.id,
         server_id: record.id,
         name: label,
         status: descriptor.status,
         storage_driver: "wings",
         bytes: descriptor.bytes,
         progress: descriptor.progress,
+        checksum: descriptor.checksum,
+        completed_at: descriptor.completedAt,
       });
       if (error) throw error;
       await recordAudit({ action: "backup.create", resourceType: "server", resourceId: record.id });
