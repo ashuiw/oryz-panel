@@ -77,6 +77,8 @@ EOF
 need_config() {
   env_load "$ORYZ_ENV_FILE" ||
     die "no configuration at $ORYZ_ENV_FILE — run 'panelctl install' first"
+  # The installer works with PANEL_DOMAIN; the stored config uses APP_DOMAIN.
+  PANEL_DOMAIN="${PANEL_DOMAIN:-${APP_DOMAIN:-}}"
 }
 
 SECRET_KEY_PATTERN='(SECRET|PASSWORD|KEY|TOKEN|DATABASE_URL|REDIS_URL)'

@@ -19,10 +19,33 @@ nginx_supports_http2_directive() {
   (( patch >= 1 ))
 }
 
+# Fill in every variable the templates need. Installs export PANEL_DOMAIN, but
+# `panelctl rebuild` only loads /etc/oryz/oryz.env, which uses APP_DOMAIN — so
+# derive missing values instead of failing under `set -u`.
+proxy_resolve_vars() {
+  PANEL_DOMAIN="${PANEL_DOMAIN:-${APP_DOMAIN:-}}"
+  if [[ -z "$PANEL_DOMAIN" && -n "${APP_URL:-}" ]]; then
+    PANEL_DOMAIN="${APP_URL#*://}"; PANEL_DOMAIN="${PANEL_DOMAIN%%/*}"
+  fi
+  [[ -n "$PANEL_DOMAIN" ]] ||
+    die "no panel domain configured — run: panelctl config set APP_DOMAIN panel.example.com"
+  APP_DOMAIN="${APP_DOMAIN:-$PANEL_DOMAIN}"
+  APP_PORT="${APP_PORT:-3000}"
+  WS_PORT="${WS_PORT:-3001}"
+  ORYZ_APP_DIR="${ORYZ_APP_DIR:-/opt/oryz/app}"
+  PROXY_KIND="${PROXY_KIND:-nginx}"
+  SSL_MODE="${SSL_MODE:-letsencrypt}"
+  SSL_EMAIL="${SSL_EMAIL:-admin@${PANEL_DOMAIN}}"
+  SSL_CERT_PATH="${SSL_CERT_PATH:-/etc/letsencrypt/live/${PANEL_DOMAIN}/fullchain.pem}"
+  SSL_KEY_PATH="${SSL_KEY_PATH:-/etc/letsencrypt/live/${PANEL_DOMAIN}/privkey.pem}"
+}
+
 render_template() {
   # render_template src dest — substitutes @@VAR@@ placeholders.
   local src="$1" dest="$2"
+  proxy_resolve_vars
   [[ -f "$src" ]] || die "missing template: $src"
+
   local http2_listen="" http2_directive=""
   if nginx_supports_http2_directive; then
     http2_directive="    http2 on;"
@@ -88,6 +111,7 @@ configure_traefik() {
 
 configure_reverse_proxy() {
   step "Reverse proxy"
+  proxy_resolve_vars
   local tpl_dir="${ORYZ_TEMPLATE_DIR:-$ORYZ_APP_DIR/deploy/templates}"
   case "${PROXY_KIND:-nginx}" in
     nginx)   configure_nginx "$tpl_dir" ;;
